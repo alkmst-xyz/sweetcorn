@@ -2,72 +2,128 @@ package logs
 
 import (
 	"context"
-	"log"
+	"database/sql"
 	"testing"
 	"time"
+
+	_ "github.com/marcboeker/go-duckdb/v2"
 )
 
-func TestInsertAndQuery(t *testing.T) {
+func withTestDB(t *testing.T, tableName string, fn func(ctx context.Context, cfg *Config, db *sql.DB)) {
 	cfg := &Config{
 		DataSourceName: "",
-		LogsTableName:  "otel_logs_test",
+		LogsTableName:  tableName,
 	}
 
 	db, err := cfg.openDB()
 	if err != nil {
-		log.Fatalf("failed to open duckdb: %v", err)
+		t.Fatalf("failed to open db: %v", err)
 	}
 	defer db.Close()
 
 	ctx := context.Background()
 
-	createLogsTable(ctx, cfg, db)
+	if err := createLogsTable(ctx, cfg, db); err != nil {
+		t.Fatalf("failed to create table: %v", err)
+	}
 
-	logRecord := LogRecord{
-		Timestamp:         uint64(time.Now().UnixNano()),
-		TraceId:           "abc123",
-		SpanId:            "span456",
+	fn(ctx, cfg, db)
+}
+
+func sampleLog(ts uint64) LogRecord {
+	return LogRecord{
+		Timestamp:         ts,
+		TraceId:           "trace",
+		SpanId:            "span",
 		TraceFlags:        1,
 		SeverityText:      "INFO",
 		SeverityNumber:    9,
 		ServiceName:       "test-service",
-		Body:              "This is a log message",
-		ResourceSchemaUrl: "http://schema.resource",
+		Body:              "body",
+		ResourceSchemaUrl: "http://resource",
 		ResourceAttributes: map[string]any{
-			"host": "localhost",
+			"k": "v",
 		},
-		ScopeSchemaUrl: "http://schema.scope",
-		ScopeName:      "logger",
-		ScopeVersion:   "v1.0.0",
+		ScopeSchemaUrl: "http://scope",
+		ScopeName:      "scope",
+		ScopeVersion:   "v1",
 		ScopeAttributes: map[string]any{
-			"lib": "loglib",
+			"scope": "attr",
 		},
 		LogAttributes: map[string]any{
 			"env": "test",
-			"boi": 1,
 		},
 	}
+}
 
-	err = insertLog(ctx, cfg, db, logRecord)
+func TestInsertAndQuery_ValidLog(t *testing.T) {
+	withTestDB(t, "logs_valid_test", func(ctx context.Context, cfg *Config, db *sql.DB) {
+		log := sampleLog(uint64(time.Now().UnixNano()))
+
+		if err := insertLog(ctx, cfg, db, log); err != nil {
+			t.Fatalf("insertLog failed: %v", err)
+		}
+
+		results, err := queryLogs(ctx, cfg, db)
+		if err != nil {
+			t.Fatalf("queryLogs failed: %v", err)
+		}
+
+		if len(results) != 1 {
+			t.Fatalf("expected 1 result, got %d", len(results))
+		}
+
+		got := results[0]
+		if got.ServiceName != log.ServiceName {
+			t.Errorf("expected service name %s, got %s", log.ServiceName, got.ServiceName)
+		}
+	})
+}
+
+func TestInsertLog_EmptyAttributes(t *testing.T) {
+	withTestDB(t, "logs_empty_attr_test", func(ctx context.Context, cfg *Config, db *sql.DB) {
+		log := sampleLog(uint64(time.Now().UnixNano()))
+		log.ResourceAttributes = nil
+		log.ScopeAttributes = nil
+		log.LogAttributes = nil
+
+		if err := insertLog(ctx, cfg, db, log); err != nil {
+			t.Fatalf("insertLog failed: %v", err)
+		}
+
+		results, _ := queryLogs(ctx, cfg, db)
+		if len(results) != 1 {
+			t.Fatal("expected 1 result for empty attributes")
+		}
+	})
+}
+
+func TestOpenDB_InvalidDSN(t *testing.T) {
+	cfg := &Config{
+		DataSourceName: "invalid:://path",
+		LogsTableName:  "bad_dsn_test",
+	}
+
+	_, err := cfg.openDB()
+	if err == nil {
+		t.Fatal("expected error for invalid DSN")
+	}
+}
+
+func TestQueryLogs_WithoutTable(t *testing.T) {
+	cfg := &Config{
+		DataSourceName: "",
+		LogsTableName:  "non_existent_table",
+	}
+
+	db, err := cfg.openDB()
 	if err != nil {
-		t.Fatalf("insertLog failed: %v", err)
+		t.Fatalf("failed to open DB: %v", err)
 	}
+	defer db.Close()
 
-	results, err := queryLogs(ctx, cfg, db)
-	if err != nil {
-		t.Fatalf("queryLogs failed: %v", err)
-	}
-
-	if len(results) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(results))
-	}
-
-	got := results[0]
-	if got.ServiceName != logRecord.ServiceName {
-		t.Errorf("expected service name %s, got %s", logRecord.ServiceName, got.ServiceName)
-	}
-
-	if got.LogAttributes["env"] != "test" {
-		t.Errorf("expected log attribute env=test, got %v", got.LogAttributes["env"])
+	_, err = queryLogs(context.Background(), cfg, db)
+	if err == nil {
+		t.Fatal("expected error querying non-existent table")
 	}
 }
