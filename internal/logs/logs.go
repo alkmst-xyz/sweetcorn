@@ -4,11 +4,16 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/marcboeker/go-duckdb/v2"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/plog"
+	conventions "go.opentelemetry.io/collector/semconv/v1.27.0"
 )
 
 const (
@@ -95,7 +100,7 @@ func renderQueryLogsSQL(cfg *Config) string {
 }
 
 type LogRecord struct {
-	Timestamp          uint64
+	Timestamp          pcommon.Timestamp
 	TraceId            string
 	SpanId             string
 	TraceFlags         uint8
@@ -120,13 +125,24 @@ func createLogsTable(ctx context.Context, cfg *Config, db *sql.DB) error {
 }
 
 // Convert nanoseconds since epoch to time.Time
-func toISO8601(ts uint64) string {
+func toISO8601(ts pcommon.Timestamp) string {
 	t := time.Unix(0, int64(ts)).UTC()
 	return t.Format(time.RFC3339Nano)
 }
 
 func jsonBlob(m map[string]any) []byte {
 	b, _ := json.Marshal(m)
+	return b
+}
+
+func AttributesToBytes(attributes pcommon.Map) []byte {
+	result := make(map[string]any)
+
+	for k, v := range attributes.All() {
+		result[k] = v.AsString()
+	}
+
+	b, _ := json.Marshal(result)
 	return b
 }
 
@@ -191,7 +207,7 @@ func queryLogs(ctx context.Context, cfg *Config, db *sql.DB) ([]LogRecord, error
 			return nil, err
 		}
 
-		result.Timestamp = uint64(timestamp.UnixNano())
+		result.Timestamp = pcommon.Timestamp(timestamp.UnixNano())
 
 		_ = json.NewDecoder(bytes.NewReader(resourceAttrs)).Decode(&result.ResourceAttributes)
 		_ = json.NewDecoder(bytes.NewReader(scopeAttrs)).Decode(&result.ScopeAttributes)
@@ -201,4 +217,103 @@ func queryLogs(ctx context.Context, cfg *Config, db *sql.DB) ([]LogRecord, error
 	}
 
 	return results, nil
+}
+
+func InsertLogsData(ctx context.Context, db *sql.DB, insertSQL string, ld plog.Logs) error {
+	for i := range ld.ResourceLogs().Len() {
+		logs := ld.ResourceLogs().At(i)
+		res := logs.Resource()
+		resURL := logs.SchemaUrl()
+		resAttr := AttributesToBytes(res.Attributes())
+		serviceName := GetServiceName(res.Attributes())
+
+		for j := range logs.ScopeLogs().Len() {
+			rs := logs.ScopeLogs().At(j).LogRecords()
+			scopeURL := logs.ScopeLogs().At(j).SchemaUrl()
+			scopeName := logs.ScopeLogs().At(j).Scope().Name()
+			scopeVersion := logs.ScopeLogs().At(j).Scope().Version()
+			scopeAttr := AttributesToBytes(logs.ScopeLogs().At(j).Scope().Attributes())
+
+			for k := range rs.Len() {
+				r := rs.At(k)
+
+				timestamp := r.Timestamp()
+				if timestamp == 0 {
+					timestamp = r.ObservedTimestamp()
+				}
+
+				logAttr := AttributesToBytes(r.Attributes())
+
+				_, err := db.ExecContext(ctx, insertSQL,
+					toISO8601(timestamp),
+					TraceIDToHexOrEmptyString(r.TraceID()),
+					SpanIDToHexOrEmptyString(r.SpanID()),
+					uint32(r.Flags()),
+					r.SeverityText(),
+					int32(r.SeverityNumber()),
+					serviceName,
+					r.Body().AsString(),
+					resURL,
+					resAttr,
+					scopeURL,
+					scopeName,
+					scopeVersion,
+					scopeAttr,
+					logAttr,
+				)
+				if err != nil {
+					return fmt.Errorf("ExecContext:%w", err)
+				}
+			}
+		}
+	}
+	return nil
+
+}
+
+// escape single quotes for DuckDB literal syntax
+func escape(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
+}
+
+func AttributesToMap(attributes pcommon.Map) string {
+	pairs := make([]string, 0, attributes.Len())
+	for k, v := range attributes.All() {
+		pairs = append(pairs, fmt.Sprintf("'%s': '%s'", escape(k), escape(v.AsString())))
+	}
+
+	return fmt.Sprintf("{%s}", strings.Join(pairs, ", "))
+}
+
+func GetServiceName(resAttr pcommon.Map) string {
+	var serviceName string
+	if v, ok := resAttr.Get(conventions.AttributeServiceName); ok {
+		serviceName = v.AsString()
+	}
+
+	return serviceName
+}
+
+// yoinked from
+// https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/internal/coreinternal/traceutil/traceutil.go
+//
+// SpanIDToHexOrEmptyString returns a hex string from SpanID.
+// An empty string is returned, if SpanID is empty.
+func SpanIDToHexOrEmptyString(id pcommon.SpanID) string {
+	if id.IsEmpty() {
+		return ""
+	}
+	return hex.EncodeToString(id[:])
+}
+
+// yoinked from
+// https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/internal/coreinternal/traceutil/traceutil.go
+//
+// TraceIDToHexOrEmptyString returns a hex string from TraceID.
+// An empty string is returned, if TraceID is empty.
+func TraceIDToHexOrEmptyString(id pcommon.TraceID) string {
+	if id.IsEmpty() {
+		return ""
+	}
+	return hex.EncodeToString(id[:])
 }

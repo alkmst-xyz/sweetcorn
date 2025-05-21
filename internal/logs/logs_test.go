@@ -7,6 +7,9 @@ import (
 	"time"
 
 	_ "github.com/marcboeker/go-duckdb/v2"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/plog"
+	conventions "go.opentelemetry.io/collector/semconv/v1.27.0"
 )
 
 func withTestDB(t *testing.T, tableName string, fn func(ctx context.Context, cfg *Config, db *sql.DB)) {
@@ -30,7 +33,7 @@ func withTestDB(t *testing.T, tableName string, fn func(ctx context.Context, cfg
 	fn(ctx, cfg, db)
 }
 
-func sampleLog(ts uint64) LogRecord {
+func sampleLog(ts pcommon.Timestamp) LogRecord {
 	return LogRecord{
 		Timestamp:         ts,
 		TraceId:           "trace",
@@ -56,9 +59,35 @@ func sampleLog(ts uint64) LogRecord {
 	}
 }
 
+func simpleLogs(count int) plog.Logs {
+	logs := plog.NewLogs()
+	rl := logs.ResourceLogs().AppendEmpty()
+	rl.SetSchemaUrl("https://opentelemetry.io/schemas/1.4.0")
+	rl.Resource().Attributes().PutStr("service.name", "test-service")
+	sl := rl.ScopeLogs().AppendEmpty()
+	sl.SetSchemaUrl("https://opentelemetry.io/schemas/1.7.0")
+	sl.Scope().SetName("duckdb")
+	sl.Scope().SetVersion("1.0.0")
+	sl.Scope().Attributes().PutStr("lib", "duckdb")
+	timestamp := time.Unix(1703498029, 0)
+	for i := range count {
+		r := sl.LogRecords().AppendEmpty()
+		r.SetTimestamp(pcommon.NewTimestampFromTime(timestamp))
+		r.SetObservedTimestamp(pcommon.NewTimestampFromTime(timestamp))
+		r.SetSeverityNumber(plog.SeverityNumberError2)
+		r.SetSeverityText("error")
+		r.Body().SetStr("error message")
+		r.Attributes().PutStr(conventions.AttributeServiceNamespace, "default")
+		r.SetFlags(plog.DefaultLogRecordFlags)
+		r.SetTraceID([16]byte{1, 2, 3, byte(i)})
+		r.SetSpanID([8]byte{1, 2, 3, byte(i)})
+	}
+	return logs
+}
+
 func TestInsertAndQuery_ValidLog(t *testing.T) {
 	withTestDB(t, "logs_valid_test", func(ctx context.Context, cfg *Config, db *sql.DB) {
-		log := sampleLog(uint64(time.Now().UnixNano()))
+		log := sampleLog(pcommon.Timestamp(time.Now().UnixNano()))
 
 		if err := insertLog(ctx, cfg, db, log); err != nil {
 			t.Fatalf("insertLog failed: %v", err)
@@ -82,7 +111,7 @@ func TestInsertAndQuery_ValidLog(t *testing.T) {
 
 func TestInsertLog_EmptyAttributes(t *testing.T) {
 	withTestDB(t, "logs_empty_attr_test", func(ctx context.Context, cfg *Config, db *sql.DB) {
-		log := sampleLog(uint64(time.Now().UnixNano()))
+		log := sampleLog(pcommon.Timestamp(time.Now().UnixNano()))
 		log.ResourceAttributes = nil
 		log.ScopeAttributes = nil
 		log.LogAttributes = nil
@@ -126,4 +155,15 @@ func TestQueryLogs_WithoutTable(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error querying non-existent table")
 	}
+}
+
+func TestInsertOtelLogs(t *testing.T) {
+	withTestDB(t, "insert_otel_logs", func(ctx context.Context, cfg *Config, db *sql.DB) {
+		logs := simpleLogs(1)
+		insertLogsSQL := renderInsertLogsSQL(cfg)
+
+		if err := InsertLogsData(ctx, db, insertLogsSQL, logs); err != nil {
+			t.Fatalf("insertLog failed: %v", err)
+		}
+	})
 }
