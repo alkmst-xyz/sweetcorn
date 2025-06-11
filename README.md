@@ -33,6 +33,16 @@ make test
 curl https://install.duckdb.org | sh
 ```
 
+### Telemetry generation
+
+Mock telemetry data can be generated using [`telemetrygen`](github.com/opentelemetry-collector-contrib/cmd/telemetrygen@latest).
+
+`telemetrygen` is installed as a `go tool` (check the tools directive in [go.mod](./go.mod) for the exact version).
+
+```bash
+go tool telemetrygen --help
+```
+
 ## References
 
 1. [Observability 3](https://charity.wtf/2025/03/24/another-observability-3-0-appears-on-the-horizon/)
