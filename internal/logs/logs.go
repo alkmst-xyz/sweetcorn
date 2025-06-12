@@ -80,7 +80,7 @@ type Config struct {
 	LogsTableName string
 }
 
-func (cfg *Config) openDB() (*sql.DB, error) {
+func (cfg *Config) OpenDB() (*sql.DB, error) {
 	db, err := sql.Open("duckdb", cfg.DataSourceName)
 	if err != nil {
 		return nil, err
@@ -92,7 +92,7 @@ func renderCreateLogsTableSQL(cfg *Config) string {
 	return fmt.Sprintf(createLogsTableSQL, cfg.LogsTableName)
 }
 
-func renderInsertLogsSQL(cfg *Config) string {
+func RenderInsertLogsSQL(cfg *Config) string {
 	return fmt.Sprintf(insertLogsSQLTemplate, cfg.LogsTableName)
 }
 func renderQueryLogsSQL(cfg *Config) string {
@@ -117,7 +117,7 @@ type LogRecord struct {
 	LogAttributes      map[string]any
 }
 
-func createLogsTable(ctx context.Context, cfg *Config, db *sql.DB) error {
+func CreateLogsTable(ctx context.Context, cfg *Config, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, renderCreateLogsTableSQL(cfg)); err != nil {
 		return fmt.Errorf("exec create logs table sql: %w", err)
 	}
@@ -148,7 +148,7 @@ func AttributesToBytes(attributes pcommon.Map) []byte {
 
 func insertLog(ctx context.Context, cfg *Config, db *sql.DB, logRecord LogRecord) error {
 
-	insertLogsSQL := renderInsertLogsSQL(cfg)
+	insertLogsSQL := RenderInsertLogsSQL(cfg)
 
 	_, err := db.ExecContext(ctx, insertLogsSQL,
 		toISO8601(logRecord.Timestamp),
@@ -316,4 +316,30 @@ func TraceIDToHexOrEmptyString(id pcommon.TraceID) string {
 		return ""
 	}
 	return hex.EncodeToString(id[:])
+}
+
+func SimpleLogs(count int) plog.Logs {
+	logs := plog.NewLogs()
+	rl := logs.ResourceLogs().AppendEmpty()
+	rl.SetSchemaUrl("https://opentelemetry.io/schemas/1.4.0")
+	rl.Resource().Attributes().PutStr("service.name", "test-service2")
+	sl := rl.ScopeLogs().AppendEmpty()
+	sl.SetSchemaUrl("https://opentelemetry.io/schemas/1.7.0")
+	sl.Scope().SetName("duckdb")
+	sl.Scope().SetVersion("1.0.0")
+	sl.Scope().Attributes().PutStr("lib", "duckdb")
+	timestamp := time.Now()
+	for i := range count {
+		r := sl.LogRecords().AppendEmpty()
+		r.SetTimestamp(pcommon.NewTimestampFromTime(timestamp))
+		r.SetObservedTimestamp(pcommon.NewTimestampFromTime(timestamp))
+		r.SetSeverityNumber(plog.SeverityNumberError2)
+		r.SetSeverityText("error")
+		r.Body().SetStr("error message")
+		r.Attributes().PutStr(conventions.AttributeServiceNamespace, "default")
+		r.SetFlags(plog.DefaultLogRecordFlags)
+		r.SetTraceID([16]byte{1, 2, 3, byte(i)})
+		r.SetSpanID([8]byte{1, 2, 3, byte(i)})
+	}
+	return logs
 }
