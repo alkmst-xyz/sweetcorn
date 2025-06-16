@@ -40,7 +40,8 @@ Mock telemetry data can be generated using [`telemetrygen`](github.com/opentelem
 `telemetrygen` is installed as a `go tool` (check the tools directive in [go.mod](./go.mod) for the exact version).
 
 ```bash
-go tool telemetrygen --help
+# example: generate logs for 5 seconds
+go tool telemetrygen logs --otlp-http --otlp-insecure --otlp-endpoint localhost:8090 --duration 5s
 ```
 
 ## References
