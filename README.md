@@ -5,19 +5,20 @@ A DuckDB backend for OpenTelemetry data.
 ## Features
 
 - [x] Logs
-  - [ ] Basic insert
-  - [ ] Basic query
-  - [ ] Create and query views
-- [ ] Spans
+  - [x] Basic insert
+  - [x] Basic query
+  - [x] Create and query views
+- [x] Traces
 - [ ] Metrics
-- [ ] HTTP server
+- [ ] Basic HTTP server
+  - [x] Handle protobuf payload
 - [ ] Exporter for open telemetry collector
-- [ ] Focus completly on DuckDB data types, OTEL -> database schema transformation, etc.
+- [ ] Focus completely on DuckDB data types, OTEL -> database schema transformation, etc.
 - [ ] TTL for rows (duck db does not provide it)
   - Table specific TTL configuration
 - [ ] Refresh views periodically
   - This way the schemas will remain up to date
-- [ ] Add configuration parameters for duckdb and add to `config.yaml`
+- [ ] Add configuration parameters for DuckDB and add to `config.yaml`
 - [ ] Compression:
   - DuckDB has built-in compression with lightweight compression algorithms.
 

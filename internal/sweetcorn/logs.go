@@ -1,4 +1,4 @@
-package logs
+package sweetcorn
 
 import (
 	"bytes"
@@ -75,9 +75,9 @@ FROM %s`
 )
 
 type Config struct {
-	DataSourceName string
-
-	LogsTableName string
+	DataSourceName  string
+	LogsTableName   string
+	TracesTableName string
 }
 
 func (cfg *Config) OpenDB() (*sql.DB, error) {
@@ -95,6 +95,7 @@ func renderCreateLogsTableSQL(cfg *Config) string {
 func RenderInsertLogsSQL(cfg *Config) string {
 	return fmt.Sprintf(insertLogsSQLTemplate, cfg.LogsTableName)
 }
+
 func renderQueryLogsSQL(cfg *Config) string {
 	return fmt.Sprintf(queryLogsSQLTemplate, cfg.LogsTableName)
 }
@@ -135,19 +136,7 @@ func jsonBlob(m map[string]any) []byte {
 	return b
 }
 
-func AttributesToBytes(attributes pcommon.Map) []byte {
-	result := make(map[string]any)
-
-	for k, v := range attributes.All() {
-		result[k] = v.AsString()
-	}
-
-	b, _ := json.Marshal(result)
-	return b
-}
-
 func insertLog(ctx context.Context, cfg *Config, db *sql.DB, logRecord LogRecord) error {
-
 	insertLogsSQL := RenderInsertLogsSQL(cfg)
 
 	_, err := db.ExecContext(ctx, insertLogsSQL,

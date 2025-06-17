@@ -4,6 +4,7 @@ go 1.24.1
 
 require (
 	github.com/marcboeker/go-duckdb/v2 v2.2.1
+	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.128.0
 	go.opentelemetry.io/collector/pdata v1.34.0
 	go.opentelemetry.io/collector/semconv v0.126.0
 )
