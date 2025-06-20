@@ -1,13 +1,11 @@
-package logs
+package sweetcorn
 
 import (
 	"bytes"
 	"context"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	_ "github.com/marcboeker/go-duckdb/v2"
@@ -74,20 +72,6 @@ const (
 FROM %s`
 )
 
-type Config struct {
-	DataSourceName string
-
-	LogsTableName string
-}
-
-func (cfg *Config) OpenDB() (*sql.DB, error) {
-	db, err := sql.Open("duckdb", cfg.DataSourceName)
-	if err != nil {
-		return nil, err
-	}
-	return db, nil
-}
-
 func renderCreateLogsTableSQL(cfg *Config) string {
 	return fmt.Sprintf(createLogsTableSQL, cfg.LogsTableName)
 }
@@ -95,6 +79,7 @@ func renderCreateLogsTableSQL(cfg *Config) string {
 func RenderInsertLogsSQL(cfg *Config) string {
 	return fmt.Sprintf(insertLogsSQLTemplate, cfg.LogsTableName)
 }
+
 func renderQueryLogsSQL(cfg *Config) string {
 	return fmt.Sprintf(queryLogsSQLTemplate, cfg.LogsTableName)
 }
@@ -135,19 +120,7 @@ func jsonBlob(m map[string]any) []byte {
 	return b
 }
 
-func AttributesToBytes(attributes pcommon.Map) []byte {
-	result := make(map[string]any)
-
-	for k, v := range attributes.All() {
-		result[k] = v.AsString()
-	}
-
-	b, _ := json.Marshal(result)
-	return b
-}
-
 func insertLog(ctx context.Context, cfg *Config, db *sql.DB, logRecord LogRecord) error {
-
 	insertLogsSQL := RenderInsertLogsSQL(cfg)
 
 	_, err := db.ExecContext(ctx, insertLogsSQL,
@@ -269,53 +242,6 @@ func InsertLogsData(ctx context.Context, db *sql.DB, insertSQL string, ld plog.L
 	}
 	return nil
 
-}
-
-// escape single quotes for DuckDB literal syntax
-func escape(s string) string {
-	return strings.ReplaceAll(s, "'", "''")
-}
-
-func AttributesToMap(attributes pcommon.Map) string {
-	pairs := make([]string, 0, attributes.Len())
-	for k, v := range attributes.All() {
-		pairs = append(pairs, fmt.Sprintf("'%s': '%s'", escape(k), escape(v.AsString())))
-	}
-
-	return fmt.Sprintf("{%s}", strings.Join(pairs, ", "))
-}
-
-func GetServiceName(resAttr pcommon.Map) string {
-	var serviceName string
-	if v, ok := resAttr.Get(conventions.AttributeServiceName); ok {
-		serviceName = v.AsString()
-	}
-
-	return serviceName
-}
-
-// yoinked from
-// https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/internal/coreinternal/traceutil/traceutil.go
-//
-// SpanIDToHexOrEmptyString returns a hex string from SpanID.
-// An empty string is returned, if SpanID is empty.
-func SpanIDToHexOrEmptyString(id pcommon.SpanID) string {
-	if id.IsEmpty() {
-		return ""
-	}
-	return hex.EncodeToString(id[:])
-}
-
-// yoinked from
-// https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/internal/coreinternal/traceutil/traceutil.go
-//
-// TraceIDToHexOrEmptyString returns a hex string from TraceID.
-// An empty string is returned, if TraceID is empty.
-func TraceIDToHexOrEmptyString(id pcommon.TraceID) string {
-	if id.IsEmpty() {
-		return ""
-	}
-	return hex.EncodeToString(id[:])
 }
 
 func SimpleLogs(count int) plog.Logs {
