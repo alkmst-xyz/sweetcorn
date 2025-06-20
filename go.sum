@@ -75,8 +75,6 @@ github.com/modern-go/reflect2 v1.0.2 h1:xBagoLtFs94CBntxluKeaWgTMpvLxC4ur3nMaC9G
 github.com/modern-go/reflect2 v1.0.2/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
 github.com/open-telemetry/opentelemetry-collector-contrib/cmd/telemetrygen v0.128.0 h1:CBSa0jGVNUo44/4iAjskjVexivsezP3TAFKkO9DNrx4=
 github.com/open-telemetry/opentelemetry-collector-contrib/cmd/telemetrygen v0.128.0/go.mod h1:9PJA8gLkUvr96ecowJcdKMlxWRaCfHEjmh0zYwSKac0=
-github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.128.0 h1:pk3zbuzGL3ELwJFHUrbQYfia6RYYQtbePVXEX7y12Sk=
-github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.128.0/go.mod h1:uhaIFkna6WNPDrhGQuBNVA4nUBU774XK+GCwN4zLqII=
 github.com/pierrec/lz4/v4 v4.1.22 h1:cKFw6uJDK+/gfw5BcDL0JL5aBsAFdsIT18eRtLj7VIU=
 github.com/pierrec/lz4/v4 v4.1.22/go.mod h1:gZWDp/Ze/IJXGXf23ltt2EXimqmTUXEy0GFuRQyBid4=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
