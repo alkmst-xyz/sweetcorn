@@ -6,12 +6,17 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 
 	"github.com/alkmst-xyz/sweetcorn/internal/sweetcorn"
 	_ "github.com/marcboeker/go-duckdb/v2"
+	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/pdata/plog/plogotlp"
 	"go.opentelemetry.io/collector/pdata/ptrace/ptraceotlp"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
@@ -91,6 +96,70 @@ func (s Service) handleTraces(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// yoinked from "go.opentelemetry.io/collector/receiver/otlpreceiver/internal/errors"
+func GetStatusFromError(err error) error {
+	s, ok := status.FromError(err)
+	if !ok {
+		// Default to a retryable error
+		// https://github.com/open-telemetry/opentelemetry-proto/blob/main/docs/specification.md#failures
+		code := codes.Unavailable
+		if consumererror.IsPermanent(err) {
+			// If an error is permanent but doesn't have an attached gRPC status, assume it is server-side.
+			code = codes.Internal
+		}
+		s = status.New(code, err.Error())
+	}
+	return s.Err()
+}
+
+type LogsGRPCService struct {
+	plogotlp.UnimplementedGRPCServer
+	ctx           context.Context
+	db            *sql.DB
+	insertLogsSQL string
+}
+
+func (r *LogsGRPCService) Export(ctx context.Context, req plogotlp.ExportRequest) (plogotlp.ExportResponse, error) {
+	ld := req.Logs()
+	numSpans := ld.LogRecordCount()
+	if numSpans == 0 {
+		return plogotlp.NewExportResponse(), nil
+	}
+
+	err := sweetcorn.InsertLogsData(r.ctx, r.db, r.insertLogsSQL, ld)
+
+	if err != nil {
+		log.Fatalf("Failed to write logs to db: %v", err)
+		return plogotlp.NewExportResponse(), GetStatusFromError(err)
+	}
+
+	return plogotlp.NewExportResponse(), nil
+}
+
+type TracesGRPCService struct {
+	ptraceotlp.UnimplementedGRPCServer
+	ctx             context.Context
+	db              *sql.DB
+	insertTracesSQL string
+}
+
+func (r *TracesGRPCService) Export(ctx context.Context, req ptraceotlp.ExportRequest) (ptraceotlp.ExportResponse, error) {
+	td := req.Traces()
+	numSpans := td.SpanCount()
+	if numSpans == 0 {
+		return ptraceotlp.NewExportResponse(), nil
+	}
+
+	err := sweetcorn.InsertTracesData(r.ctx, r.db, r.insertTracesSQL, td)
+
+	if err != nil {
+		log.Fatalf("Failed to write traces to db: %v", err)
+		return ptraceotlp.NewExportResponse(), GetStatusFromError(err)
+	}
+
+	return ptraceotlp.NewExportResponse(), nil
+}
+
 func main() {
 	cfg := &sweetcorn.Config{
 		DataSourceName:  "sweetcorn.db",
@@ -117,6 +186,37 @@ func main() {
 	insertLogsSQL := sweetcorn.RenderInsertLogsSQL(cfg)
 	insertTracesSQL := sweetcorn.RenderInsertTracesSQL(cfg)
 
+	// grpc
+	const addr = "0.0.0.0:4317"
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+
+	server := grpc.NewServer()
+
+	logsService := &LogsGRPCService{
+		ctx:           ctx,
+		db:            db,
+		insertLogsSQL: insertLogsSQL,
+	}
+	tracesService := &TracesGRPCService{
+		ctx:             ctx,
+		db:              db,
+		insertTracesSQL: insertTracesSQL,
+	}
+
+	plogotlp.RegisterGRPCServer(server, logsService)
+	ptraceotlp.RegisterGRPCServer(server, tracesService)
+
+	log.Printf("Starting GRPC server %v", listener.Addr())
+	go func() {
+		if errGrpc := server.Serve(listener); errGrpc != nil {
+			log.Fatalf("failed to serve: %v", errGrpc)
+		}
+	}()
+
+	// http
 	svc := &Service{
 		ctx:             ctx,
 		db:              db,
@@ -129,5 +229,6 @@ func main() {
 	mux.HandleFunc("POST /v1/logs", svc.handleLogs)
 	mux.HandleFunc("POST /v1/traces", svc.handleTraces)
 
-	http.ListenAndServe("localhost:8090", mux)
+	log.Printf("Starting HTTP server")
+	http.ListenAndServe("localhost:4318", mux)
 }
