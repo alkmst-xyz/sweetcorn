@@ -41,11 +41,17 @@ curl https://install.duckdb.org | sh
 
 Mock telemetry data can be generated using [`telemetrygen`](github.com/opentelemetry-collector-contrib/cmd/telemetrygen@latest).
 
-`telemetrygen` is installed as a `go tool` (check the tools directive in [go.mod](./go.mod) for the exact version).
-
 ```bash
-# example: generate logs for 5 seconds
-go tool telemetrygen logs --otlp-http --otlp-insecure --otlp-endpoint localhost:8090 --duration 5s
+# install telemetrygen
+go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/telemetrygen
+
+# example: send logs/traces via grpc
+telemetrygen logs --otlp-insecure --otlp-endpoint localhost:4317 --duration 5s
+telemetrygen traces --otlp-insecure --otlp-endpoint localhost:4317 --duration 5s
+
+# example: send logs/traces via http
+telemetrygen logs --otlp-http --otlp-insecure --otlp-endpoint localhost:4318 --duration 5s
+telemetrygen traces --otlp-http --otlp-insecure --otlp-endpoint localhost:4318 --duration 5s
 ```
 
 ## Query
