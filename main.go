@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 
 	"github.com/alkmst-xyz/sweetcorn/internal/sweetcorn"
 	_ "github.com/marcboeker/go-duckdb/v2"
@@ -162,9 +163,15 @@ func (r *TracesGRPCService) Export(ctx context.Context, req ptraceotlp.ExportReq
 
 func main() {
 	cfg := &sweetcorn.Config{
-		DataSourceName:  "sweetcorn.db",
+		DataSourceName:  ".sweetcorn/data/sweetcorn.db",
 		LogsTableName:   "otel_logs",
 		TracesTableName: "otel_traces",
+	}
+
+	// create data dir
+	err := os.MkdirAll(".sweetcorn/data", 0755)
+	if err != nil {
+		log.Fatalf("Failed to create sweetcorn data dir: %s", err)
 	}
 
 	db, err := cfg.OpenDB()

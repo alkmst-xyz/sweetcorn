@@ -13,6 +13,7 @@ A DuckDB backend for OpenTelemetry data.
 - [x] Basic HTTP server
 - [x] Basic GRPC server
 - [x] Handle protobuf payload
+- [ ] Docker Image
 - [ ] Handle JSON payload
 - [ ] Exporter for open telemetry collector
 - [ ] Focus completely on DuckDB data types, OTEL -> database schema transformation, etc.
