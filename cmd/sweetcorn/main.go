@@ -163,13 +163,13 @@ func (r *TracesGRPCService) Export(ctx context.Context, req ptraceotlp.ExportReq
 
 func main() {
 	cfg := &sweetcorn.Config{
-		DataSourceName:  ".sweetcorn/data/sweetcorn.db",
+		DataSourceName:  ".sweetcorn_data/sweetcorn.db",
 		LogsTableName:   "otel_logs",
 		TracesTableName: "otel_traces",
 	}
 
 	// create data dir
-	err := os.MkdirAll(".sweetcorn/data", 0755)
+	err := os.MkdirAll(".sweetcorn_data", 0755)
 	if err != nil {
 		log.Fatalf("Failed to create sweetcorn data dir: %s", err)
 	}
