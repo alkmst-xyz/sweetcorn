@@ -24,7 +24,6 @@ go.work.sum
 # env file
 .env
 
-build/
-_sweetcorn_data
-sweetcorn.db*
-main
+.sweetcorn_data/
+sweetcorn
+!sweetcorn/
