@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/alkmst-xyz/sweetcorn/internal/sweetcorn"
 	_ "github.com/marcboeker/go-duckdb/v2"
 	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/pdata/plog/plogotlp"
@@ -18,6 +17,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/alkmst-xyz/sweetcorn/internal/sweetcorn"
 )
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
@@ -176,31 +177,31 @@ func main() {
 
 	db, err := cfg.OpenDB()
 	if err != nil {
-		log.Fatalf("failed to open db: %v", err)
+		log.Fatalf("Failed to open DB: %v", err)
 	}
 	defer db.Close()
 
 	ctx := context.Background()
 
 	if err := sweetcorn.CreateLogsTable(ctx, cfg, db); err != nil {
-		log.Fatalf("failed to create logs table: %v", err)
+		log.Fatalf("Failed to create logs table: %v", err)
 	}
 
 	if err := sweetcorn.CreateTracesTable(ctx, cfg, db); err != nil {
-		log.Fatalf("failed to create traces table: %v", err)
+		log.Fatalf("Failed to create traces table: %v", err)
 	}
 
 	insertLogsSQL := sweetcorn.RenderInsertLogsSQL(cfg)
 	insertTracesSQL := sweetcorn.RenderInsertTracesSQL(cfg)
 
 	// grpc
-	const addr = "0.0.0.0:4317"
-	listener, err := net.Listen("tcp", addr)
+	const grpcAddr = ":4317"
+	listener, err := net.Listen("tcp", grpcAddr)
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		log.Fatalf("Failed to create listener: %v", err)
 	}
 
-	server := grpc.NewServer()
+	grpcServer := grpc.NewServer()
 
 	logsService := &LogsGRPCService{
 		ctx:           ctx,
@@ -213,13 +214,13 @@ func main() {
 		insertTracesSQL: insertTracesSQL,
 	}
 
-	plogotlp.RegisterGRPCServer(server, logsService)
-	ptraceotlp.RegisterGRPCServer(server, tracesService)
+	plogotlp.RegisterGRPCServer(grpcServer, logsService)
+	ptraceotlp.RegisterGRPCServer(grpcServer, tracesService)
 
 	log.Printf("Starting GRPC server %v", listener.Addr())
 	go func() {
-		if errGrpc := server.Serve(listener); errGrpc != nil {
-			log.Fatalf("failed to serve: %v", errGrpc)
+		if grpcErr := grpcServer.Serve(listener); grpcErr != nil {
+			log.Fatalf("Failed to start gRPC server: %v", grpcErr)
 		}
 	}()
 
@@ -236,6 +237,11 @@ func main() {
 	mux.HandleFunc("POST /v1/logs", svc.handleLogs)
 	mux.HandleFunc("POST /v1/traces", svc.handleTraces)
 
-	log.Printf("Starting HTTP server")
-	http.ListenAndServe("localhost:4318", mux)
+	const httpAddr = ":4318"
+	httpServer := &http.Server{Addr: httpAddr, Handler: mux}
+
+	log.Printf("Starting HTTP server %v", httpServer.Addr)
+	if httpErr := httpServer.ListenAndServe(); httpErr != nil {
+		log.Fatalf("Failed to start HTTP server: %v", httpErr)
+	}
 }
