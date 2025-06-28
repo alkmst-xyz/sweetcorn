@@ -6,6 +6,7 @@ PROJECT_NAME := sweetcorn
 # Build configuration
 BUILD_DIR := build
 BIN_DIR := $(BUILD_DIR)/bin
+COVERAGE_DIR := $(BUILD_DIR)/coverage
 
 # Binary names
 SWEETCORN_BIN := $(BIN_DIR)/sweetcorn
@@ -28,7 +29,7 @@ help:
 .PHONY: dev-setup
 dev-setup: ## Setup development environment
 	@echo "[INFO] Setting up development environment..."
-	@mkdir -p $(BIN_DIR)
+	@mkdir -p $(BIN_DIR) $(COVERAGE_DIR)
 
 .PHONY: deps
 deps: ## Download and tidy dependencies
@@ -63,9 +64,15 @@ build: dev-setup ## Build sweetcorn binary
 ###############################################################################
 	
 .PHONY: test
-test: dev-setup
+test: dev-setup ## Run all tests
 	@echo "[INFO] Running tests..."
 	go test -v ./...
+
+.PHONY: test-coverage
+test-coverage: dev-setup ## Run all tests with coverage
+	@echo "[INFO] Running tests with coverage..."
+	go test -v -coverprofile $(COVERAGE_DIR)/coverage.out ./...
+	go tool cover -html $(COVERAGE_DIR)/coverage.out -o $(COVERAGE_DIR)/coverage.html
 
 ###############################################################################
 # Linting and Code Quality
