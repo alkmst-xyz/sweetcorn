@@ -42,8 +42,8 @@ deps-update: ## Update all dependencies to latest versions
 	go get -u -t ./...
 	go mod tidy
 
-.PHONY: tools
-tools: ## Install development tools
+.PHONY: dev-tools
+dev-tools: ## Install development tools
 	@echo Installing development tools...
 	@go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/telemetrygen@v0.128.0
 
