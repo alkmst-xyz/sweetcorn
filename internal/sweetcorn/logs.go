@@ -235,13 +235,13 @@ func InsertLogsData(ctx context.Context, db *sql.DB, insertSQL string, ld plog.L
 					logAttr,
 				)
 				if err != nil {
-					return fmt.Errorf("ExecContext:%w", err)
+					return err
 				}
 			}
 		}
 	}
-	return nil
 
+	return nil
 }
 
 func SimpleLogs(count int) plog.Logs {

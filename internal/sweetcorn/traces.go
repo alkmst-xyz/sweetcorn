@@ -145,11 +145,11 @@ func InsertTracesData(ctx context.Context, db *sql.DB, insertSQL string, td ptra
 					linksAttrs,
 				)
 				if err != nil {
-					return fmt.Errorf("ExecContext:%w", err)
+					return err
 				}
 			}
 		}
 	}
-	return nil
 
+	return nil
 }
