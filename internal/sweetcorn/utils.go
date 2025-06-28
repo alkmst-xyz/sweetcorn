@@ -7,7 +7,7 @@ import (
 
 	_ "github.com/marcboeker/go-duckdb/v2"
 	"go.opentelemetry.io/collector/pdata/pcommon"
-	conventions "go.opentelemetry.io/collector/semconv/v1.27.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
 )
 
 type Config struct {
@@ -51,7 +51,7 @@ func AttributesArrayToBytes(attributesArray []pcommon.Map) []byte {
 
 func GetServiceName(resAttr pcommon.Map) string {
 	var serviceName string
-	if v, ok := resAttr.Get(conventions.AttributeServiceName); ok {
+	if v, ok := resAttr.Get(string(semconv.ServiceNameKey)); ok {
 		serviceName = v.AsString()
 	}
 
