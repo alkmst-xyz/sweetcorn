@@ -42,8 +42,8 @@ deps-update: ## Update all dependencies to latest versions
 	go get -u -t ./...
 	go mod tidy
 
-.PHONY: tools
-tools: ## Install development tools
+.PHONY: dev-tools
+dev-tools: ## Install development tools
 	@echo Installing development tools...
 	@go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/telemetrygen@v0.128.0
 
@@ -67,9 +67,9 @@ test: dev-setup
 	@echo "[INFO] Running tests..."
 	go test -v ./...
 
-# =============================================================================
+###############################################################################
 # Linting and Code Quality
-# =============================================================================
+###############################################################################
 
 .PHONY: fmt
 fmt: ## Format code
@@ -86,19 +86,28 @@ mod-verify: ## Verify module dependencies
 	@echo "[INFO] Verifying module dependencies..."
 	go mod verify
 
-# =============================================================================
+###############################################################################
 # CI/CD
-# =============================================================================
+###############################################################################
 
 .PHONY: ci
 ci: | deps vet mod-verify test build ## Run CI pipeline ('|' operator imposes ordering)
 	@echo "[INFO] CI pipeline completed"
 
-# =============================================================================
+###############################################################################
 # Cleanup
-# =============================================================================
+###############################################################################
 
 .PHONY: clean
 clean: ## Clean build artifacts
 	@echo "[INFO] Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR)
+
+###############################################################################
+# Development
+###############################################################################
+
+.PHONY: run
+run: build ## Run the server
+	@echo "[INFO] Starting sweetcorn..."
+	$(SWEETCORN_BIN)
