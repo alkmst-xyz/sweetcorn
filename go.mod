@@ -6,7 +6,7 @@ require (
 	github.com/marcboeker/go-duckdb/v2 v2.3.2
 	go.opentelemetry.io/collector/consumer/consumererror v0.128.0
 	go.opentelemetry.io/collector/pdata v1.34.0
-	go.opentelemetry.io/collector/semconv v0.128.0
+	go.opentelemetry.io/otel v1.37.0
 	google.golang.org/grpc v1.73.0
 )
 
@@ -33,7 +33,6 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.opentelemetry.io/collector/pdata/pprofile v0.128.0 // indirect
-	go.opentelemetry.io/otel v1.36.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.36.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
