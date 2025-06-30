@@ -51,6 +51,9 @@ type encoder interface {
 	unmarshalTracesRequest(buf []byte) (ptraceotlp.ExportRequest, error)
 	unmarshalLogsRequest(buf []byte) (plogotlp.ExportRequest, error)
 
+	marshalTracesResponse(ptraceotlp.ExportResponse) ([]byte, error)
+	marshalLogsResponse(plogotlp.ExportResponse) ([]byte, error)
+
 	marshalStatus(rsp *spb.Status) ([]byte, error)
 
 	contentType() string
@@ -68,6 +71,22 @@ func (protoEncoder) unmarshalLogsRequest(buf []byte) (plogotlp.ExportRequest, er
 	req := plogotlp.NewExportRequest()
 	err := req.UnmarshalProto(buf)
 	return req, err
+}
+
+func (protoEncoder) marshalTracesResponse(resp ptraceotlp.ExportResponse) ([]byte, error) {
+	return resp.MarshalProto()
+}
+
+func (protoEncoder) marshalLogsResponse(resp plogotlp.ExportResponse) ([]byte, error) {
+	return resp.MarshalProto()
+}
+
+func (jsonEncoder) marshalTracesResponse(resp ptraceotlp.ExportResponse) ([]byte, error) {
+	return resp.MarshalJSON()
+}
+
+func (jsonEncoder) marshalLogsResponse(resp plogotlp.ExportResponse) ([]byte, error) {
+	return resp.MarshalJSON()
 }
 
 func (protoEncoder) marshalStatus(resp *spb.Status) ([]byte, error) {
@@ -113,6 +132,8 @@ type Service struct {
 	insertTracesSQL string
 }
 
+// TODO: return appropriate status errors
+// Ref: https://github.com/open-telemetry/opentelemetry-collector/blob/main/receiver/otlpreceiver/internal/logs/otlp.go
 func (s Service) handleLogs(resp http.ResponseWriter, req *http.Request) {
 	enc, ok := readContentType(resp, req)
 	if !ok {
@@ -130,11 +151,18 @@ func (s Service) handleLogs(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := sweetcorn.InsertLogsData(s.ctx, s.db, s.insertLogsSQL, otlpReq.Logs()); err != nil {
-		log.Fatalf("Failed to write logs to DB: %v", err)
+	err = sweetcorn.InsertLogsData(s.ctx, s.db, s.insertLogsSQL, otlpReq.Logs())
+	if err != nil {
 		writeError(resp, enc, err, http.StatusInternalServerError)
 		return
 	}
+
+	msg, err := enc.marshalLogsResponse(plogotlp.NewExportResponse())
+	if err != nil {
+		writeError(resp, enc, err, http.StatusInternalServerError)
+		return
+	}
+	writeResponse(resp, enc.contentType(), http.StatusOK, msg)
 }
 
 func (s Service) handleTraces(resp http.ResponseWriter, req *http.Request) {
@@ -154,10 +182,18 @@ func (s Service) handleTraces(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := sweetcorn.InsertTracesData(s.ctx, s.db, s.insertTracesSQL, otlpReq.Traces()); err != nil {
+	err = sweetcorn.InsertTracesData(s.ctx, s.db, s.insertTracesSQL, otlpReq.Traces())
+	if err != nil {
 		writeError(resp, enc, err, http.StatusInternalServerError)
 		return
 	}
+
+	msg, err := enc.marshalTracesResponse(ptraceotlp.NewExportResponse())
+	if err != nil {
+		writeError(resp, enc, err, http.StatusInternalServerError)
+		return
+	}
+	writeResponse(resp, enc.contentType(), http.StatusOK, msg)
 }
 
 // yoinked from "go.opentelemetry.io/collector/receiver/otlpreceiver/internal/errors"
@@ -191,7 +227,6 @@ func (r *LogsGRPCService) Export(ctx context.Context, req plogotlp.ExportRequest
 	}
 
 	err := sweetcorn.InsertLogsData(r.ctx, r.db, r.insertLogsSQL, ld)
-
 	if err != nil {
 		log.Fatalf("Failed to write logs to db: %v", err)
 		return plogotlp.NewExportResponse(), GetStatusFromError(err)
@@ -215,7 +250,6 @@ func (r *TracesGRPCService) Export(ctx context.Context, req ptraceotlp.ExportReq
 	}
 
 	err := sweetcorn.InsertTracesData(r.ctx, r.db, r.insertTracesSQL, td)
-
 	if err != nil {
 		log.Fatalf("Failed to write traces to db: %v", err)
 		return ptraceotlp.NewExportResponse(), GetStatusFromError(err)
