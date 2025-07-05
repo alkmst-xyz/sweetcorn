@@ -16,6 +16,7 @@ import (
 
 	"github.com/gogo/protobuf/jsonpb"
 	_ "github.com/marcboeker/go-duckdb/v2"
+	"github.com/rs/cors"
 	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/pdata/plog/plogotlp"
 	"go.opentelemetry.io/collector/pdata/ptrace/ptraceotlp"
@@ -124,7 +125,8 @@ func (jsonEncoder) contentType() string {
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprint(w, "OK\n")
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte("{\"status\": \"OK\"}"))
 }
 
 type HTTPService struct {
@@ -275,7 +277,7 @@ func startHTTPServer(ctx context.Context, db *sql.DB, insertLogsSQL string, inse
 
 	server := &http.Server{
 		Addr:    addr,
-		Handler: mux,
+		Handler: cors.Default().Handler(mux),
 	}
 
 	log.Printf("HTTP server listening on %s", addr)

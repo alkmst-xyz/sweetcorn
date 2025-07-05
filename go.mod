@@ -5,6 +5,7 @@ go 1.24.1
 require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/marcboeker/go-duckdb/v2 v2.3.2
+	github.com/rs/cors v1.11.1
 	go.opentelemetry.io/collector/consumer/consumererror v0.128.0
 	go.opentelemetry.io/collector/pdata v1.34.0
 	go.opentelemetry.io/otel v1.37.0
