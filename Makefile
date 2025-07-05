@@ -45,8 +45,14 @@ deps-update: ## Update all dependencies to latest versions
 
 .PHONY: dev-tools
 dev-tools: ## Install development tools
-	@echo Installing development tools...
+	@echo "[INFO] Installing development tools..."
 	@go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/telemetrygen@v0.128.0
+
+## Install UI dependencies.
+.PHONY: install-ui-deps
+install-ui-deps:
+	@echo "[INFO] Installing UI dependencies..."
+	@cd web && pnpm install
 
 ###############################################################################
 # Building
@@ -58,6 +64,12 @@ build: dev-setup ## Build sweetcorn binary
 	go build \
 		-o $(SWEETCORN_BIN) \
 		cmd/sweetcorn/main.go
+
+# Build UI
+.PHONY: build-ui
+build-ui:
+	@echo "[INFO] Building sweetcorn UI..."
+	@cd web && pnpm build
 
 ###############################################################################
 # Testing
@@ -118,3 +130,9 @@ clean: ## Clean build artifacts
 run: build ## Run the server
 	@echo "[INFO] Starting sweetcorn..."
 	$(SWEETCORN_BIN)
+
+# Run the frontend server in development mode.
+.PHONY: run-ui
+run-ui:
+	@echo "[INFO] Running frontend..."
+	@cd web && pnpm dev
