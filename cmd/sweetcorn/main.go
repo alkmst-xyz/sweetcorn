@@ -124,7 +124,7 @@ func (jsonEncoder) contentType() string {
 	return jsonContentType
 }
 
-func rootHandler(w http.ResponseWriter, r *http.Request) {
+func apiHealthzRouteHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte("{\"status\": \"OK\"}"))
 }
@@ -271,9 +271,13 @@ func startHTTPServer(ctx context.Context, db *sql.DB, insertLogsSQL string, inse
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", rootHandler)
+
+	// OTEL routes
 	mux.HandleFunc("POST /v1/logs", svc.handleLogs)
 	mux.HandleFunc("POST /v1/traces", svc.handleTraces)
+
+	// sweetcorn's "app" routes
+	mux.HandleFunc("GET /api/v1/healthz", apiHealthzRouteHandler)
 
 	server := &http.Server{
 		Addr:    addr,
