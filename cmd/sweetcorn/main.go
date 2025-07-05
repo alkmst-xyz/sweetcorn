@@ -271,13 +271,8 @@ func startHTTPServer(ctx context.Context, db *sql.DB, insertLogsSQL string, inse
 	}
 
 	mux := http.NewServeMux()
-
-	// OTEL routes
 	mux.HandleFunc("POST /v1/logs", svc.handleLogs)
 	mux.HandleFunc("POST /v1/traces", svc.handleTraces)
-
-	// sweetcorn's "app" routes
-	mux.HandleFunc("GET /api/v1/healthz", apiHealthzRouteHandler)
 
 	server := &http.Server{
 		Addr:    addr,
@@ -318,6 +313,25 @@ func startGRPCServer(ctx context.Context, db *sql.DB, insertLogsSQL string, inse
 	return err
 }
 
+func startApp(ctx context.Context, addr string) error {
+	mux := http.NewServeMux()
+
+	uiAssetsDir := http.FileServer(http.Dir("./web/build"))
+
+	mux.Handle("/", uiAssetsDir)
+	mux.HandleFunc("GET /api/v1/healthz", apiHealthzRouteHandler)
+
+	server := &http.Server{
+		Addr:    addr,
+		Handler: cors.Default().Handler(mux),
+	}
+
+	log.Printf("Sweetcorn server listening on %s", addr)
+	err := server.ListenAndServe()
+
+	return err
+}
+
 func main() {
 	cfg := &sweetcorn.Config{
 		DataSourceName:  ".sweetcorn_data/sweetcorn.db",
@@ -353,6 +367,7 @@ func main() {
 	// start servers
 	const httpAddr = ":4318"
 	const grpcAddr = ":4317"
+	const appAddr = ":3000"
 
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -361,6 +376,9 @@ func main() {
 	})
 	g.Go(func() error {
 		return startGRPCServer(ctx, db, insertLogsSQL, insertTracesSQL, grpcAddr)
+	})
+	g.Go(func() error {
+		return startApp(ctx, appAddr)
 	})
 
 	if err := g.Wait(); err != nil {
