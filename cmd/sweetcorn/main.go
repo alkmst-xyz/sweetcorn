@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/pdata/plog/plogotlp"
 	"go.opentelemetry.io/collector/pdata/ptrace/ptraceotlp"
+	"golang.org/x/sync/errgroup"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -125,7 +126,7 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "OK\n")
 }
 
-type Service struct {
+type HTTPService struct {
 	ctx             context.Context
 	db              *sql.DB
 	insertLogsSQL   string
@@ -134,7 +135,7 @@ type Service struct {
 
 // TODO: return appropriate status errors
 // Ref: https://github.com/open-telemetry/opentelemetry-collector/blob/main/receiver/otlpreceiver/internal/logs/otlp.go
-func (s Service) handleLogs(resp http.ResponseWriter, req *http.Request) {
+func (s HTTPService) handleLogs(resp http.ResponseWriter, req *http.Request) {
 	enc, ok := readContentType(resp, req)
 	if !ok {
 		return
@@ -165,7 +166,7 @@ func (s Service) handleLogs(resp http.ResponseWriter, req *http.Request) {
 	writeResponse(resp, enc.contentType(), http.StatusOK, msg)
 }
 
-func (s Service) handleTraces(resp http.ResponseWriter, req *http.Request) {
+func (s HTTPService) handleTraces(resp http.ResponseWriter, req *http.Request) {
 	enc, ok := readContentType(resp, req)
 	if !ok {
 		return
@@ -258,6 +259,57 @@ func (r *TracesGRPCService) Export(ctx context.Context, req ptraceotlp.ExportReq
 	return ptraceotlp.NewExportResponse(), nil
 }
 
+func startHTTPServer(ctx context.Context, db *sql.DB, insertLogsSQL string, insertTracesSQL string, addr string) error {
+	svc := &HTTPService{
+		ctx:             ctx,
+		db:              db,
+		insertLogsSQL:   insertLogsSQL,
+		insertTracesSQL: insertTracesSQL,
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", rootHandler)
+	mux.HandleFunc("POST /v1/logs", svc.handleLogs)
+	mux.HandleFunc("POST /v1/traces", svc.handleTraces)
+
+	server := &http.Server{
+		Addr:    addr,
+		Handler: mux,
+	}
+
+	log.Printf("HTTP server listening on %s", addr)
+	err := server.ListenAndServe()
+
+	return err
+}
+
+func startGRPCServer(ctx context.Context, db *sql.DB, insertLogsSQL string, insertTracesSQL string, addr string) error {
+	logsService := &LogsGRPCService{
+		ctx:           ctx,
+		db:            db,
+		insertLogsSQL: insertLogsSQL,
+	}
+	tracesService := &TracesGRPCService{
+		ctx:             ctx,
+		db:              db,
+		insertTracesSQL: insertTracesSQL,
+	}
+
+	lis, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+
+	server := grpc.NewServer()
+	plogotlp.RegisterGRPCServer(server, logsService)
+	ptraceotlp.RegisterGRPCServer(server, tracesService)
+
+	log.Printf("GRPC server listening on %s", lis.Addr())
+	err = server.Serve(lis)
+
+	return err
+}
+
 func main() {
 	cfg := &sweetcorn.Config{
 		DataSourceName:  ".sweetcorn_data/sweetcorn.db",
@@ -290,55 +342,21 @@ func main() {
 	insertLogsSQL := sweetcorn.RenderInsertLogsSQL(cfg)
 	insertTracesSQL := sweetcorn.RenderInsertTracesSQL(cfg)
 
-	// grpc
-	const grpcAddr = ":4317"
-	listener, err := net.Listen("tcp", grpcAddr)
-	if err != nil {
-		log.Fatalf("Failed to create listener: %v", err)
-	}
-
-	grpcServer := grpc.NewServer()
-
-	logsService := &LogsGRPCService{
-		ctx:           ctx,
-		db:            db,
-		insertLogsSQL: insertLogsSQL,
-	}
-	tracesService := &TracesGRPCService{
-		ctx:             ctx,
-		db:              db,
-		insertTracesSQL: insertTracesSQL,
-	}
-
-	plogotlp.RegisterGRPCServer(grpcServer, logsService)
-	ptraceotlp.RegisterGRPCServer(grpcServer, tracesService)
-
-	log.Printf("Starting GRPC server %v", listener.Addr())
-	go func() {
-		if grpcErr := grpcServer.Serve(listener); grpcErr != nil {
-			log.Fatalf("Failed to start gRPC server: %v", grpcErr)
-		}
-	}()
-
-	// http
-	svc := &Service{
-		ctx:             ctx,
-		db:              db,
-		insertLogsSQL:   insertLogsSQL,
-		insertTracesSQL: insertTracesSQL,
-	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", rootHandler)
-	mux.HandleFunc("POST /v1/logs", svc.handleLogs)
-	mux.HandleFunc("POST /v1/traces", svc.handleTraces)
-
+	// start servers
 	const httpAddr = ":4318"
-	httpServer := &http.Server{Addr: httpAddr, Handler: mux}
+	const grpcAddr = ":4317"
 
-	log.Printf("Starting HTTP server %v", httpServer.Addr)
-	if httpErr := httpServer.ListenAndServe(); httpErr != nil {
-		log.Fatalf("Failed to start HTTP server: %v", httpErr)
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		return startHTTPServer(ctx, db, insertLogsSQL, insertTracesSQL, httpAddr)
+	})
+	g.Go(func() error {
+		return startGRPCServer(ctx, db, insertLogsSQL, insertTracesSQL, grpcAddr)
+	})
+
+	if err := g.Wait(); err != nil {
+		log.Fatalf("Server exited with error: %v", err)
 	}
 }
 
