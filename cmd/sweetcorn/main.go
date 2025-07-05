@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gogo/protobuf/jsonpb"
@@ -316,16 +317,23 @@ func startGRPCServer(ctx context.Context, db *sql.DB, insertLogsSQL string, inse
 func startApp(ctx context.Context, addr string) error {
 	mux := http.NewServeMux()
 
-	uiAssetsDir := http.FileServer(http.Dir("./web/build"))
+	// Web UI
+	// Note: The file server is explicitly configured to respond with the root index
+	// when a 404 error is generated. This enables proper SPA functionality.
+	// TODO: implement similar logic as `try_files` from nginx.
+	webAssetsDirPath := "./web/build"
+	webAssetsDir := http.Dir(webAssetsDirPath)
+	webFileServer := http.FileServer(webAssetsDir)
+	webServeIndex := serveFileContents("index.html", webAssetsDir)
+	mux.Handle("/", intercept404(webFileServer, webServeIndex))
 
-	mux.Handle("/", uiAssetsDir)
+	// API routes
 	mux.HandleFunc("GET /api/v1/healthz", apiHealthzRouteHandler)
 
 	server := &http.Server{
 		Addr:    addr,
 		Handler: cors.Default().Handler(mux),
 	}
-
 	log.Printf("Sweetcorn server listening on %s", addr)
 	err := server.ListenAndServe()
 
@@ -475,4 +483,77 @@ func readAndCloseBody(resp http.ResponseWriter, req *http.Request, enc encoder) 
 		return nil, false
 	}
 	return body, true
+}
+
+//-----------------------------------------------------------------------------
+// Magic used to enable SPA mode for sweetcorn web app.
+// TODO: revise FS implementation used, inner working, etc.
+// Ref: https://hackandsla.sh/posts/2021-11-06-serve-spa-from-go/
+//-----------------------------------------------------------------------------
+
+// See https://stackoverflow.com/questions/26141953/custom-404-with-gorilla-mux-and-std-http-fileserver
+func intercept404(handler, on404 http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hookedWriter := &hookedResponseWriter{ResponseWriter: w}
+		handler.ServeHTTP(hookedWriter, r)
+
+		if hookedWriter.got404 {
+			on404.ServeHTTP(w, r)
+		}
+	})
+}
+
+type hookedResponseWriter struct {
+	http.ResponseWriter
+	got404 bool
+}
+
+func (hrw *hookedResponseWriter) WriteHeader(status int) {
+	if status == http.StatusNotFound {
+		// Don't actually write the 404 header, just set a flag.
+		hrw.got404 = true
+	} else {
+		hrw.ResponseWriter.WriteHeader(status)
+	}
+}
+
+func (hrw *hookedResponseWriter) Write(p []byte) (int, error) {
+	if hrw.got404 {
+		// No-op, but pretend that we wrote len(p) bytes to the writer.
+		return len(p), nil
+	}
+
+	return hrw.ResponseWriter.Write(p)
+}
+
+func serveFileContents(file string, files http.FileSystem) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Restrict only to instances where the browser is looking for an HTML file
+		if !strings.Contains(r.Header.Get("Accept"), "text/html") {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, "404 not found")
+
+			return
+		}
+
+		// Open the file and return its contents using http.ServeContent
+		index, err := files.Open(file)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "%s not found", file)
+
+			return
+		}
+
+		fi, err := index.Stat()
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "%s not found", file)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		http.ServeContent(w, r, fi.Name(), fi.ModTime(), index)
+	}
 }
