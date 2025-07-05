@@ -23,6 +23,7 @@ import (
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
@@ -303,6 +304,7 @@ func startGRPCServer(ctx context.Context, db *sql.DB, insertLogsSQL string, inse
 	server := grpc.NewServer()
 	plogotlp.RegisterGRPCServer(server, logsService)
 	ptraceotlp.RegisterGRPCServer(server, tracesService)
+	reflection.Register(server)
 
 	log.Printf("GRPC server listening on %s", lis.Addr())
 	err = server.Serve(lis)
