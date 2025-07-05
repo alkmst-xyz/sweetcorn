@@ -1,9 +1,11 @@
 <script lang="ts">
+	import type { LayoutProps } from './$types';
+
+	import '../app.css';
 	import Footer from './Footer.svelte';
 	import Header from './Header.svelte';
-	import '../app.css';
 
-	let { children } = $props();
+	let { data, children }: LayoutProps = $props();
 </script>
 
 <div class="mx-auto flex min-h-screen max-w-4xl flex-col bg-violet-200">
@@ -13,5 +15,5 @@
 		{@render children()}
 	</main>
 
-	<Footer />
+	<Footer statusData={data} />
 </div>
