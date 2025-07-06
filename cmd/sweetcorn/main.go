@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -123,11 +124,6 @@ func (jsonEncoder) marshalStatus(resp *spb.Status) ([]byte, error) {
 
 func (jsonEncoder) contentType() string {
 	return jsonContentType
-}
-
-func apiHealthzRouteHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte("{\"status\": \"OK\"}"))
 }
 
 type HTTPService struct {
@@ -314,7 +310,41 @@ func startGRPCServer(ctx context.Context, db *sql.DB, insertLogsSQL string, inse
 	return err
 }
 
-func startApp(ctx context.Context, addr string) error {
+// Web
+const webDefaultContentType = "application/json"
+
+type WebService struct {
+	ctx          context.Context
+	db           *sql.DB
+	queryLogsSQL string
+}
+
+func (s WebService) getHealthzHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("{\"status\": \"OK\"}"))
+}
+
+func (s WebService) getLogsHandler(w http.ResponseWriter, r *http.Request) {
+	res, err := sweetcorn.QueryLogs(s.ctx, s.db, s.queryLogsSQL)
+	if err != nil {
+		w.Header().Set("Content-Type", webDefaultContentType)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", webDefaultContentType)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(res)
+}
+
+func startApp(ctx context.Context, db *sql.DB, queryLogsSQL string, addr string) error {
+	s := &WebService{
+		ctx:          ctx,
+		db:           db,
+		queryLogsSQL: queryLogsSQL,
+	}
+
 	mux := http.NewServeMux()
 
 	// Web UI
@@ -328,7 +358,8 @@ func startApp(ctx context.Context, addr string) error {
 	mux.Handle("/", intercept404(webFileServer, webServeIndex))
 
 	// API routes
-	mux.HandleFunc("GET /api/v1/healthz", apiHealthzRouteHandler)
+	mux.HandleFunc("GET /api/v1/healthz", s.getHealthzHandler)
+	mux.HandleFunc("GET /api/v1/logs", s.getLogsHandler)
 
 	server := &http.Server{
 		Addr:    addr,
@@ -371,6 +402,7 @@ func main() {
 
 	insertLogsSQL := sweetcorn.RenderInsertLogsSQL(cfg)
 	insertTracesSQL := sweetcorn.RenderInsertTracesSQL(cfg)
+	queryLogsSQL := sweetcorn.RenderQueryLogsSQL(cfg)
 
 	// start servers
 	const httpAddr = ":4318"
@@ -386,7 +418,7 @@ func main() {
 		return startGRPCServer(ctx, db, insertLogsSQL, insertTracesSQL, grpcAddr)
 	})
 	g.Go(func() error {
-		return startApp(ctx, appAddr)
+		return startApp(ctx, db, queryLogsSQL, appAddr)
 	})
 
 	if err := g.Wait(); err != nil {
