@@ -6,7 +6,7 @@
 	let { statusData }: { statusData: StatusResponse } = $props();
 </script>
 
-<footer class="flex-col space-y-2 border-t px-3 pb-6 pt-4">
+<footer class="flex-col space-y-2 border-t px-4 pb-6 pt-4">
 	<StatusIndicator data={statusData} />
 
 	<div class="flex w-full justify-between text-sm">
