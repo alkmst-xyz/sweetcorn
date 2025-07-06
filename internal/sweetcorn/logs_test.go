@@ -7,7 +7,6 @@ import (
 	"time"
 
 	_ "github.com/marcboeker/go-duckdb/v2"
-	"go.opentelemetry.io/collector/pdata/pcommon"
 )
 
 func withTestDB(t *testing.T, tableName string, fn func(ctx context.Context, cfg *Config, db *sql.DB)) {
@@ -31,9 +30,9 @@ func withTestDB(t *testing.T, tableName string, fn func(ctx context.Context, cfg
 	fn(ctx, cfg, db)
 }
 
-func sampleLog(ts pcommon.Timestamp) LogRecord {
+func sampleLog() LogRecord {
 	return LogRecord{
-		Timestamp:         ts,
+		TimestampTime:     time.Now(),
 		TraceId:           "trace",
 		SpanId:            "span",
 		TraceFlags:        1,
@@ -59,13 +58,14 @@ func sampleLog(ts pcommon.Timestamp) LogRecord {
 
 func TestInsertAndQuery_ValidLog(t *testing.T) {
 	withTestDB(t, "logs_valid_test", func(ctx context.Context, cfg *Config, db *sql.DB) {
-		log := sampleLog(pcommon.Timestamp(time.Now().UnixNano()))
+		log := sampleLog()
 
 		if err := insertLog(ctx, cfg, db, log); err != nil {
 			t.Fatalf("insertLog failed: %v", err)
 		}
 
-		results, err := queryLogs(ctx, cfg, db)
+		queryLogsSQL := RenderQueryLogsSQL(cfg)
+		results, err := QueryLogs(ctx, db, queryLogsSQL)
 		if err != nil {
 			t.Fatalf("queryLogs failed: %v", err)
 		}
@@ -83,7 +83,7 @@ func TestInsertAndQuery_ValidLog(t *testing.T) {
 
 func TestInsertLog_EmptyAttributes(t *testing.T) {
 	withTestDB(t, "logs_empty_attr_test", func(ctx context.Context, cfg *Config, db *sql.DB) {
-		log := sampleLog(pcommon.Timestamp(time.Now().UnixNano()))
+		log := sampleLog()
 		log.ResourceAttributes = nil
 		log.ScopeAttributes = nil
 		log.LogAttributes = nil
@@ -92,7 +92,8 @@ func TestInsertLog_EmptyAttributes(t *testing.T) {
 			t.Fatalf("insertLog failed: %v", err)
 		}
 
-		results, _ := queryLogs(ctx, cfg, db)
+		queryLogsSQL := RenderQueryLogsSQL(cfg)
+		results, _ := QueryLogs(ctx, db, queryLogsSQL)
 		if len(results) != 1 {
 			t.Fatal("expected 1 result for empty attributes")
 		}
@@ -123,7 +124,8 @@ func TestQueryLogs_WithoutTable(t *testing.T) {
 	}
 	defer db.Close()
 
-	_, err = queryLogs(context.Background(), cfg, db)
+	queryLogsSQL := RenderQueryLogsSQL(cfg)
+	_, err = QueryLogs(context.Background(), db, queryLogsSQL)
 	if err == nil {
 		t.Fatal("expected error querying non-existent table")
 	}
