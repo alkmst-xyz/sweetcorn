@@ -27,6 +27,7 @@
 		"@sveltejs/vite-plugin-svelte": "^5.0.0",
 		"@tailwindcss/forms": "^0.5.9",
 		"@tailwindcss/vite": "^4.0.0",
+		"@tanstack/svelte-table": "npm:tanstack-table-8-svelte-5@^0.1.2",
 		"@vitest/browser": "^3.2.3",
 		"eslint": "^9.18.0",
 		"eslint-config-prettier": "^10.0.1",
@@ -49,6 +50,9 @@
 	"pnpm": {
 		"onlyBuiltDependencies": [
 			"esbuild"
-		]
+		],
+		"overrides": {
+			"@tanstack/svelte-table": "npm:tanstack-table-8-svelte-5@^0.1"
+		}
 	}
 }
