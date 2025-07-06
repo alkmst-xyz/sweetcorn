@@ -7,6 +7,11 @@
 			title: 'Home'
 		},
 		{
+			path: '/logs',
+			title: 'Logs',
+			exact: false
+		},
+		{
 			path: '/about',
 			title: 'About'
 		}
