@@ -1,4 +1,4 @@
-package sweetcorn
+package storage
 
 import (
 	"context"
@@ -70,7 +70,7 @@ func convertEvents(events ptrace.SpanEventSlice) (times []time.Time, names []str
 		names = append(names, event.Name())
 		attrsRaw = append(attrsRaw, event.Attributes())
 	}
-	attrs = AttributesArrayToBytes(attrsRaw)
+	attrs = attributesArrayToBytes(attrsRaw)
 	return
 }
 
@@ -78,12 +78,12 @@ func convertLinks(links ptrace.SpanLinkSlice) (traceIDs []string, spanIDs []stri
 	var attrsRaw []pcommon.Map
 	for i := 0; i < links.Len(); i++ {
 		link := links.At(i)
-		traceIDs = append(traceIDs, TraceIDToHexOrEmptyString(link.TraceID()))
-		spanIDs = append(spanIDs, SpanIDToHexOrEmptyString(link.SpanID()))
+		traceIDs = append(traceIDs, traceIDToHexOrEmptyString(link.TraceID()))
+		spanIDs = append(spanIDs, spanIDToHexOrEmptyString(link.SpanID()))
 		states = append(states, link.TraceState().AsRaw())
 		attrsRaw = append(attrsRaw, link.Attributes())
 	}
-	attrs = AttributesArrayToBytes(attrsRaw)
+	attrs = attributesArrayToBytes(attrsRaw)
 	return
 }
 
@@ -106,8 +106,8 @@ func InsertTracesData(ctx context.Context, db *sql.DB, insertSQL string, td ptra
 	for i := 0; i < td.ResourceSpans().Len(); i++ {
 		spans := td.ResourceSpans().At(i)
 		res := spans.Resource()
-		resAttr := AttributesToBytes(res.Attributes())
-		serviceName := GetServiceName(res.Attributes())
+		resAttr := attributesToBytes(res.Attributes())
+		serviceName := getServiceName(res.Attributes())
 
 		for j := 0; j < spans.ScopeSpans().Len(); j++ {
 			rs := spans.ScopeSpans().At(j).Spans()
@@ -115,16 +115,16 @@ func InsertTracesData(ctx context.Context, db *sql.DB, insertSQL string, td ptra
 			scopeVersion := spans.ScopeSpans().At(j).Scope().Version()
 			for k := 0; k < rs.Len(); k++ {
 				r := rs.At(k)
-				spanAttr := AttributesToBytes(r.Attributes())
+				spanAttr := attributesToBytes(r.Attributes())
 				status := r.Status()
 				_, eventNames, eventAttrs := convertEvents(r.Events())
 				linksTraceIDs, linksSpanIDs, linksTraceStates, linksAttrs := convertLinks(r.Links())
 
 				_, err := db.ExecContext(ctx, insertSQL,
 					r.StartTimestamp().AsTime(),
-					TraceIDToHexOrEmptyString(r.TraceID()),
-					SpanIDToHexOrEmptyString(r.SpanID()),
-					SpanIDToHexOrEmptyString(r.ParentSpanID()),
+					traceIDToHexOrEmptyString(r.TraceID()),
+					spanIDToHexOrEmptyString(r.SpanID()),
+					spanIDToHexOrEmptyString(r.ParentSpanID()),
 					r.TraceState().AsRaw(),
 					r.Name(),
 					r.Kind().String(),

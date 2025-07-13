@@ -1,5 +1,5 @@
 // https://github.com/open-telemetry/opentelemetry-collector/blob/main/internal/statusutil/helper.go
-package statusutil
+package otlphttp
 
 import (
 	"net/http"

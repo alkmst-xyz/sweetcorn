@@ -1,4 +1,4 @@
-package sweetcorn
+package storage
 
 import (
 	"database/sql"
@@ -24,7 +24,7 @@ func (cfg *Config) OpenDB() (*sql.DB, error) {
 	return db, nil
 }
 
-func AttributesToBytes(attributes pcommon.Map) []byte {
+func attributesToBytes(attributes pcommon.Map) []byte {
 	result := make(map[string]any)
 
 	for k, v := range attributes.All() {
@@ -35,7 +35,7 @@ func AttributesToBytes(attributes pcommon.Map) []byte {
 	return b
 }
 
-func AttributesArrayToBytes(attributesArray []pcommon.Map) []byte {
+func attributesArrayToBytes(attributesArray []pcommon.Map) []byte {
 	result := make(map[string]any)
 
 	for _, item := range attributesArray {
@@ -49,7 +49,7 @@ func AttributesArrayToBytes(attributesArray []pcommon.Map) []byte {
 	return b
 }
 
-func GetServiceName(resAttr pcommon.Map) string {
+func getServiceName(resAttr pcommon.Map) string {
 	var serviceName string
 	if v, ok := resAttr.Get(string(semconv.ServiceNameKey)); ok {
 		serviceName = v.AsString()
@@ -61,9 +61,9 @@ func GetServiceName(resAttr pcommon.Map) string {
 // yoinked from
 // https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/internal/coreinternal/traceutil/traceutil.go
 //
-// SpanIDToHexOrEmptyString returns a hex string from SpanID.
+// spanIDToHexOrEmptyString returns a hex string from SpanID.
 // An empty string is returned, if SpanID is empty.
-func SpanIDToHexOrEmptyString(id pcommon.SpanID) string {
+func spanIDToHexOrEmptyString(id pcommon.SpanID) string {
 	if id.IsEmpty() {
 		return ""
 	}
@@ -73,9 +73,9 @@ func SpanIDToHexOrEmptyString(id pcommon.SpanID) string {
 // yoinked from
 // https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/internal/coreinternal/traceutil/traceutil.go
 //
-// TraceIDToHexOrEmptyString returns a hex string from TraceID.
+// traceIDToHexOrEmptyString returns a hex string from TraceID.
 // An empty string is returned, if TraceID is empty.
-func TraceIDToHexOrEmptyString(id pcommon.TraceID) string {
+func traceIDToHexOrEmptyString(id pcommon.TraceID) string {
 	if id.IsEmpty() {
 		return ""
 	}
