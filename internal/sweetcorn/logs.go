@@ -54,7 +54,7 @@ const (
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
 	queryLogsSQLTemplate = `SELECT
-	Timestamp,
+	TimestampTime,
 	TraceId,
 	SpanId,
 	TraceFlags,
@@ -69,7 +69,13 @@ const (
 	ScopeVersion,
 	ScopeAttributes,
 	LogAttributes
-FROM %s`
+FROM
+	%s
+ORDER BY
+	Timestamp DESC
+LIMIT
+	100;
+`
 )
 
 func renderCreateLogsTableSQL(cfg *Config) string {
@@ -80,26 +86,26 @@ func RenderInsertLogsSQL(cfg *Config) string {
 	return fmt.Sprintf(insertLogsSQLTemplate, cfg.LogsTableName)
 }
 
-func renderQueryLogsSQL(cfg *Config) string {
+func RenderQueryLogsSQL(cfg *Config) string {
 	return fmt.Sprintf(queryLogsSQLTemplate, cfg.LogsTableName)
 }
 
 type LogRecord struct {
-	Timestamp          pcommon.Timestamp
-	TraceId            string
-	SpanId             string
-	TraceFlags         uint8
-	SeverityText       string
-	SeverityNumber     uint8
-	ServiceName        string
-	Body               string
-	ResourceSchemaUrl  string
-	ResourceAttributes map[string]any
-	ScopeSchemaUrl     string
-	ScopeName          string
-	ScopeVersion       string
-	ScopeAttributes    map[string]any
-	LogAttributes      map[string]any
+	TimestampTime      time.Time      `json:"timestamp"`
+	TraceId            string         `json:"traceId"`
+	SpanId             string         `json:"spanId"`
+	TraceFlags         uint8          `json:"traceFlags"`
+	SeverityText       string         `json:"severityText"`
+	SeverityNumber     uint8          `json:"severityNumber"`
+	ServiceName        string         `json:"serviceName"`
+	Body               string         `json:"body"`
+	ResourceSchemaUrl  string         `json:"resourceSchemaUrl"`
+	ResourceAttributes map[string]any `json:"resourceAttributes"`
+	ScopeSchemaUrl     string         `json:"scopeSchemaUrl"`
+	ScopeName          string         `json:"scopeName"`
+	ScopeVersion       string         `json:"scopeVersion"`
+	ScopeAttributes    map[string]any `json:"scopeAttributes"`
+	LogAttributes      map[string]any `json:"logAttributes"`
 }
 
 func CreateLogsTable(ctx context.Context, cfg *Config, db *sql.DB) error {
@@ -120,11 +126,12 @@ func jsonBlob(m map[string]any) []byte {
 	return b
 }
 
+// deprecated
 func insertLog(ctx context.Context, cfg *Config, db *sql.DB, logRecord LogRecord) error {
 	insertLogsSQL := RenderInsertLogsSQL(cfg)
 
 	_, err := db.ExecContext(ctx, insertLogsSQL,
-		toISO8601(logRecord.Timestamp),
+		logRecord.TimestampTime,
 		logRecord.TraceId,
 		logRecord.SpanId,
 		logRecord.TraceFlags,
@@ -144,8 +151,7 @@ func insertLog(ctx context.Context, cfg *Config, db *sql.DB, logRecord LogRecord
 	return err
 }
 
-func queryLogs(ctx context.Context, cfg *Config, db *sql.DB) ([]LogRecord, error) {
-	queryLogsSQL := renderQueryLogsSQL(cfg)
+func QueryLogs(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]LogRecord, error) {
 	rows, err := db.QueryContext(ctx, queryLogsSQL)
 	if err != nil {
 		return nil, err
@@ -156,11 +162,10 @@ func queryLogs(ctx context.Context, cfg *Config, db *sql.DB) ([]LogRecord, error
 
 	for rows.Next() {
 		var result LogRecord
-		var timestamp time.Time
 		var resourceAttrs, scopeAttrs, logAttrs []byte
 
 		err := rows.Scan(
-			&timestamp,
+			&result.TimestampTime,
 			&result.TraceId,
 			&result.SpanId,
 			&result.TraceFlags,
@@ -179,8 +184,6 @@ func queryLogs(ctx context.Context, cfg *Config, db *sql.DB) ([]LogRecord, error
 		if err != nil {
 			return nil, err
 		}
-
-		result.Timestamp = pcommon.Timestamp(timestamp.UnixNano())
 
 		_ = json.NewDecoder(bytes.NewReader(resourceAttrs)).Decode(&result.ResourceAttributes)
 		_ = json.NewDecoder(bytes.NewReader(scopeAttrs)).Decode(&result.ScopeAttributes)

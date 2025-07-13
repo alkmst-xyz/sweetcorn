@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -12,16 +13,20 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gogo/protobuf/jsonpb"
 	_ "github.com/marcboeker/go-duckdb/v2"
+	"github.com/rs/cors"
 	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/pdata/plog/plogotlp"
 	"go.opentelemetry.io/collector/pdata/ptrace/ptraceotlp"
+	"golang.org/x/sync/errgroup"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
@@ -121,11 +126,7 @@ func (jsonEncoder) contentType() string {
 	return jsonContentType
 }
 
-func rootHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprint(w, "OK\n")
-}
-
-type Service struct {
+type HTTPService struct {
 	ctx             context.Context
 	db              *sql.DB
 	insertLogsSQL   string
@@ -134,7 +135,7 @@ type Service struct {
 
 // TODO: return appropriate status errors
 // Ref: https://github.com/open-telemetry/opentelemetry-collector/blob/main/receiver/otlpreceiver/internal/logs/otlp.go
-func (s Service) handleLogs(resp http.ResponseWriter, req *http.Request) {
+func (s HTTPService) handleLogs(resp http.ResponseWriter, req *http.Request) {
 	enc, ok := readContentType(resp, req)
 	if !ok {
 		return
@@ -165,7 +166,7 @@ func (s Service) handleLogs(resp http.ResponseWriter, req *http.Request) {
 	writeResponse(resp, enc.contentType(), http.StatusOK, msg)
 }
 
-func (s Service) handleTraces(resp http.ResponseWriter, req *http.Request) {
+func (s HTTPService) handleTraces(resp http.ResponseWriter, req *http.Request) {
 	enc, ok := readContentType(resp, req)
 	if !ok {
 		return
@@ -258,6 +259,118 @@ func (r *TracesGRPCService) Export(ctx context.Context, req ptraceotlp.ExportReq
 	return ptraceotlp.NewExportResponse(), nil
 }
 
+func startHTTPServer(ctx context.Context, db *sql.DB, insertLogsSQL string, insertTracesSQL string, addr string) error {
+	svc := &HTTPService{
+		ctx:             ctx,
+		db:              db,
+		insertLogsSQL:   insertLogsSQL,
+		insertTracesSQL: insertTracesSQL,
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/logs", svc.handleLogs)
+	mux.HandleFunc("POST /v1/traces", svc.handleTraces)
+
+	server := &http.Server{
+		Addr:    addr,
+		Handler: cors.Default().Handler(mux),
+	}
+
+	log.Printf("HTTP server listening on %s", addr)
+	err := server.ListenAndServe()
+
+	return err
+}
+
+func startGRPCServer(ctx context.Context, db *sql.DB, insertLogsSQL string, insertTracesSQL string, addr string) error {
+	logsService := &LogsGRPCService{
+		ctx:           ctx,
+		db:            db,
+		insertLogsSQL: insertLogsSQL,
+	}
+	tracesService := &TracesGRPCService{
+		ctx:             ctx,
+		db:              db,
+		insertTracesSQL: insertTracesSQL,
+	}
+
+	lis, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+
+	server := grpc.NewServer()
+	plogotlp.RegisterGRPCServer(server, logsService)
+	ptraceotlp.RegisterGRPCServer(server, tracesService)
+	reflection.Register(server)
+
+	log.Printf("GRPC server listening on %s", lis.Addr())
+	err = server.Serve(lis)
+
+	return err
+}
+
+// Web
+const webDefaultContentType = "application/json"
+
+type WebService struct {
+	ctx          context.Context
+	db           *sql.DB
+	queryLogsSQL string
+}
+
+func (s WebService) getHealthzHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("{\"status\": \"OK\"}"))
+}
+
+func (s WebService) getLogsHandler(w http.ResponseWriter, r *http.Request) {
+	res, err := sweetcorn.QueryLogs(s.ctx, s.db, s.queryLogsSQL)
+	if err != nil {
+		w.Header().Set("Content-Type", webDefaultContentType)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", webDefaultContentType)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(res)
+}
+
+func startApp(ctx context.Context, db *sql.DB, queryLogsSQL string, addr string) error {
+	s := &WebService{
+		ctx:          ctx,
+		db:           db,
+		queryLogsSQL: queryLogsSQL,
+	}
+
+	mux := http.NewServeMux()
+
+	// Web UI
+	// Note: The file server is explicitly configured to respond with the root index
+	// when a 404 error is generated. This enables proper SPA functionality.
+	// TODO: implement similar logic as `try_files` from nginx.
+	webAssetsDirPath := "./web/build"
+	webAssetsDir := http.Dir(webAssetsDirPath)
+	webFileServer := http.FileServer(webAssetsDir)
+	webServeIndex := serveFileContents("index.html", webAssetsDir)
+	mux.Handle("/", intercept404(webFileServer, webServeIndex))
+
+	// API routes
+	mux.HandleFunc("GET /api/v1/healthz", s.getHealthzHandler)
+	mux.HandleFunc("GET /api/v1/logs", s.getLogsHandler)
+
+	server := &http.Server{
+		Addr:    addr,
+		Handler: cors.Default().Handler(mux),
+	}
+	log.Printf("Sweetcorn server listening on %s", addr)
+	err := server.ListenAndServe()
+
+	return err
+}
+
 func main() {
 	cfg := &sweetcorn.Config{
 		DataSourceName:  ".sweetcorn_data/sweetcorn.db",
@@ -289,56 +402,27 @@ func main() {
 
 	insertLogsSQL := sweetcorn.RenderInsertLogsSQL(cfg)
 	insertTracesSQL := sweetcorn.RenderInsertTracesSQL(cfg)
+	queryLogsSQL := sweetcorn.RenderQueryLogsSQL(cfg)
 
-	// grpc
-	const grpcAddr = ":4317"
-	listener, err := net.Listen("tcp", grpcAddr)
-	if err != nil {
-		log.Fatalf("Failed to create listener: %v", err)
-	}
-
-	grpcServer := grpc.NewServer()
-
-	logsService := &LogsGRPCService{
-		ctx:           ctx,
-		db:            db,
-		insertLogsSQL: insertLogsSQL,
-	}
-	tracesService := &TracesGRPCService{
-		ctx:             ctx,
-		db:              db,
-		insertTracesSQL: insertTracesSQL,
-	}
-
-	plogotlp.RegisterGRPCServer(grpcServer, logsService)
-	ptraceotlp.RegisterGRPCServer(grpcServer, tracesService)
-
-	log.Printf("Starting GRPC server %v", listener.Addr())
-	go func() {
-		if grpcErr := grpcServer.Serve(listener); grpcErr != nil {
-			log.Fatalf("Failed to start gRPC server: %v", grpcErr)
-		}
-	}()
-
-	// http
-	svc := &Service{
-		ctx:             ctx,
-		db:              db,
-		insertLogsSQL:   insertLogsSQL,
-		insertTracesSQL: insertTracesSQL,
-	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", rootHandler)
-	mux.HandleFunc("POST /v1/logs", svc.handleLogs)
-	mux.HandleFunc("POST /v1/traces", svc.handleTraces)
-
+	// start servers
 	const httpAddr = ":4318"
-	httpServer := &http.Server{Addr: httpAddr, Handler: mux}
+	const grpcAddr = ":4317"
+	const appAddr = ":3000"
 
-	log.Printf("Starting HTTP server %v", httpServer.Addr)
-	if httpErr := httpServer.ListenAndServe(); httpErr != nil {
-		log.Fatalf("Failed to start HTTP server: %v", httpErr)
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		return startHTTPServer(ctx, db, insertLogsSQL, insertTracesSQL, httpAddr)
+	})
+	g.Go(func() error {
+		return startGRPCServer(ctx, db, insertLogsSQL, insertTracesSQL, grpcAddr)
+	})
+	g.Go(func() error {
+		return startApp(ctx, db, queryLogsSQL, appAddr)
+	})
+
+	if err := g.Wait(); err != nil {
+		log.Fatalf("Server exited with error: %v", err)
 	}
 }
 
@@ -431,4 +515,77 @@ func readAndCloseBody(resp http.ResponseWriter, req *http.Request, enc encoder) 
 		return nil, false
 	}
 	return body, true
+}
+
+//-----------------------------------------------------------------------------
+// Magic used to enable SPA mode for sweetcorn web app.
+// TODO: revise FS implementation used, inner working, etc.
+// Ref: https://hackandsla.sh/posts/2021-11-06-serve-spa-from-go/
+//-----------------------------------------------------------------------------
+
+// See https://stackoverflow.com/questions/26141953/custom-404-with-gorilla-mux-and-std-http-fileserver
+func intercept404(handler, on404 http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hookedWriter := &hookedResponseWriter{ResponseWriter: w}
+		handler.ServeHTTP(hookedWriter, r)
+
+		if hookedWriter.got404 {
+			on404.ServeHTTP(w, r)
+		}
+	})
+}
+
+type hookedResponseWriter struct {
+	http.ResponseWriter
+	got404 bool
+}
+
+func (hrw *hookedResponseWriter) WriteHeader(status int) {
+	if status == http.StatusNotFound {
+		// Don't actually write the 404 header, just set a flag.
+		hrw.got404 = true
+	} else {
+		hrw.ResponseWriter.WriteHeader(status)
+	}
+}
+
+func (hrw *hookedResponseWriter) Write(p []byte) (int, error) {
+	if hrw.got404 {
+		// No-op, but pretend that we wrote len(p) bytes to the writer.
+		return len(p), nil
+	}
+
+	return hrw.ResponseWriter.Write(p)
+}
+
+func serveFileContents(file string, files http.FileSystem) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Restrict only to instances where the browser is looking for an HTML file
+		if !strings.Contains(r.Header.Get("Accept"), "text/html") {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, "404 not found")
+
+			return
+		}
+
+		// Open the file and return its contents using http.ServeContent
+		index, err := files.Open(file)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "%s not found", file)
+
+			return
+		}
+
+		fi, err := index.Stat()
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "%s not found", file)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		http.ServeContent(w, r, fi.Name(), fi.ModTime(), index)
+	}
 }
