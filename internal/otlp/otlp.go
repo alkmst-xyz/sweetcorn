@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
-	"github.com/alkmst-xyz/sweetcorn/internal/sweetcorn"
+	"github.com/alkmst-xyz/sweetcorn/internal/storage"
 )
 
 //
@@ -55,7 +55,7 @@ func (r *LogsGRPCService) Export(ctx context.Context, req plogotlp.ExportRequest
 		return plogotlp.NewExportResponse(), nil
 	}
 
-	err := sweetcorn.InsertLogsData(r.ctx, r.db, r.insertLogsSQL, ld)
+	err := storage.InsertLogsData(r.ctx, r.db, r.insertLogsSQL, ld)
 	if err != nil {
 		log.Fatalf("Failed to write logs to db: %v", err)
 		return plogotlp.NewExportResponse(), GetStatusFromError(err)
@@ -82,7 +82,7 @@ func (r *TracesGRPCService) Export(ctx context.Context, req ptraceotlp.ExportReq
 		return ptraceotlp.NewExportResponse(), nil
 	}
 
-	err := sweetcorn.InsertTracesData(r.ctx, r.db, r.insertTracesSQL, td)
+	err := storage.InsertTracesData(r.ctx, r.db, r.insertTracesSQL, td)
 	if err != nil {
 		log.Fatalf("Failed to write traces to db: %v", err)
 		return ptraceotlp.NewExportResponse(), GetStatusFromError(err)

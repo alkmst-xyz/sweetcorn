@@ -1,4 +1,4 @@
-package sweetcorn
+package storage
 
 import (
 	"context"

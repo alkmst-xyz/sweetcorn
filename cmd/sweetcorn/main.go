@@ -11,12 +11,12 @@ import (
 	"github.com/alkmst-xyz/sweetcorn/internal/app"
 	"github.com/alkmst-xyz/sweetcorn/internal/otlp"
 	"github.com/alkmst-xyz/sweetcorn/internal/otlphttp"
-	"github.com/alkmst-xyz/sweetcorn/internal/sweetcorn"
+	"github.com/alkmst-xyz/sweetcorn/internal/storage"
 )
 
 func main() {
-	cfg := &sweetcorn.Config{
-		DataSourceName:  ".sweetcorn_data/sweetcorn.db",
+	cfg := &storage.Config{
+		DataSourceName:  ".sweetcorn_data/storage.db",
 		LogsTableName:   "otel_logs",
 		TracesTableName: "otel_traces",
 	}
@@ -35,17 +35,17 @@ func main() {
 
 	ctx := context.Background()
 
-	if err := sweetcorn.CreateLogsTable(ctx, cfg, db); err != nil {
+	if err := storage.CreateLogsTable(ctx, cfg, db); err != nil {
 		log.Fatalf("Failed to create logs table: %v", err)
 	}
 
-	if err := sweetcorn.CreateTracesTable(ctx, cfg, db); err != nil {
+	if err := storage.CreateTracesTable(ctx, cfg, db); err != nil {
 		log.Fatalf("Failed to create traces table: %v", err)
 	}
 
-	insertLogsSQL := sweetcorn.RenderInsertLogsSQL(cfg)
-	insertTracesSQL := sweetcorn.RenderInsertTracesSQL(cfg)
-	queryLogsSQL := sweetcorn.RenderQueryLogsSQL(cfg)
+	insertLogsSQL := storage.RenderInsertLogsSQL(cfg)
+	insertTracesSQL := storage.RenderInsertTracesSQL(cfg)
+	queryLogsSQL := storage.RenderQueryLogsSQL(cfg)
 
 	// start servers
 	const httpAddr = ":4318"

@@ -1,4 +1,4 @@
-package sweetcorn
+package storage
 
 import (
 	"bytes"
@@ -200,15 +200,15 @@ func InsertLogsData(ctx context.Context, db *sql.DB, insertSQL string, ld plog.L
 		logs := ld.ResourceLogs().At(i)
 		res := logs.Resource()
 		resURL := logs.SchemaUrl()
-		resAttr := AttributesToBytes(res.Attributes())
-		serviceName := GetServiceName(res.Attributes())
+		resAttr := attributesToBytes(res.Attributes())
+		serviceName := getServiceName(res.Attributes())
 
 		for j := range logs.ScopeLogs().Len() {
 			rs := logs.ScopeLogs().At(j).LogRecords()
 			scopeURL := logs.ScopeLogs().At(j).SchemaUrl()
 			scopeName := logs.ScopeLogs().At(j).Scope().Name()
 			scopeVersion := logs.ScopeLogs().At(j).Scope().Version()
-			scopeAttr := AttributesToBytes(logs.ScopeLogs().At(j).Scope().Attributes())
+			scopeAttr := attributesToBytes(logs.ScopeLogs().At(j).Scope().Attributes())
 
 			for k := range rs.Len() {
 				r := rs.At(k)
@@ -218,12 +218,12 @@ func InsertLogsData(ctx context.Context, db *sql.DB, insertSQL string, ld plog.L
 					timestamp = r.ObservedTimestamp()
 				}
 
-				logAttr := AttributesToBytes(r.Attributes())
+				logAttr := attributesToBytes(r.Attributes())
 
 				_, err := db.ExecContext(ctx, insertSQL,
 					toISO8601(timestamp),
-					TraceIDToHexOrEmptyString(r.TraceID()),
-					SpanIDToHexOrEmptyString(r.SpanID()),
+					traceIDToHexOrEmptyString(r.TraceID()),
+					spanIDToHexOrEmptyString(r.SpanID()),
 					uint32(r.Flags()),
 					r.SeverityText(),
 					int32(r.SeverityNumber()),

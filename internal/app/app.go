@@ -9,7 +9,7 @@ import (
 
 	"github.com/rs/cors"
 
-	"github.com/alkmst-xyz/sweetcorn/internal/sweetcorn"
+	"github.com/alkmst-xyz/sweetcorn/internal/storage"
 )
 
 const webDefaultContentType = "application/json"
@@ -27,7 +27,7 @@ func (s WebService) getHealthzHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s WebService) getLogsHandler(w http.ResponseWriter, r *http.Request) {
-	res, err := sweetcorn.QueryLogs(s.ctx, s.db, s.queryLogsSQL)
+	res, err := storage.QueryLogs(s.ctx, s.db, s.queryLogsSQL)
 	if err != nil {
 		w.Header().Set("Content-Type", webDefaultContentType)
 		w.WriteHeader(http.StatusInternalServerError)

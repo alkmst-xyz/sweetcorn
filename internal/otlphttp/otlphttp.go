@@ -20,7 +20,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/alkmst-xyz/sweetcorn/internal/sweetcorn"
+	"github.com/alkmst-xyz/sweetcorn/internal/storage"
 )
 
 type HTTPService struct {
@@ -243,7 +243,7 @@ func (s HTTPService) handleLogs(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = sweetcorn.InsertLogsData(s.ctx, s.db, s.insertLogsSQL, otlpReq.Logs())
+	err = storage.InsertLogsData(s.ctx, s.db, s.insertLogsSQL, otlpReq.Logs())
 	if err != nil {
 		writeError(resp, enc, err, http.StatusInternalServerError)
 		return
@@ -278,7 +278,7 @@ func (s HTTPService) handleTraces(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = sweetcorn.InsertTracesData(s.ctx, s.db, s.insertTracesSQL, otlpReq.Traces())
+	err = storage.InsertTracesData(s.ctx, s.db, s.insertTracesSQL, otlpReq.Traces())
 	if err != nil {
 		writeError(resp, enc, err, http.StatusInternalServerError)
 		return
