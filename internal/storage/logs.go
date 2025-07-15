@@ -158,7 +158,7 @@ func QueryLogs(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]LogRecor
 	}
 	defer rows.Close()
 
-	var results []LogRecord
+	results := make([]LogRecord, 0)
 
 	for rows.Next() {
 		var result LogRecord
