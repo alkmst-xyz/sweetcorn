@@ -15,9 +15,10 @@ import (
 const webDefaultContentType = "application/json"
 
 type WebService struct {
-	ctx          context.Context
-	db           *sql.DB
-	queryLogsSQL string
+	ctx            context.Context
+	db             *sql.DB
+	queryLogsSQL   string
+	queryTracesSQL string
 }
 
 func (s WebService) getHealthzHandler(w http.ResponseWriter, r *http.Request) {
@@ -39,11 +40,25 @@ func (s WebService) getLogsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
-func StartWebApp(ctx context.Context, db *sql.DB, queryLogsSQL string, addr string) error {
+func (s WebService) getTracesHandler(w http.ResponseWriter, r *http.Request) {
+	res, err := storage.QueryTraces(s.ctx, s.db, s.queryTracesSQL)
+	if err != nil {
+		w.Header().Set("Content-Type", webDefaultContentType)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", webDefaultContentType)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(res)
+}
+
+func StartWebApp(ctx context.Context, db *sql.DB, queryLogsSQL string, queryTracesSQL string, addr string) error {
 	s := &WebService{
-		ctx:          ctx,
-		db:           db,
-		queryLogsSQL: queryLogsSQL,
+		ctx:            ctx,
+		db:             db,
+		queryLogsSQL:   queryLogsSQL,
+		queryTracesSQL: queryTracesSQL,
 	}
 
 	mux := http.NewServeMux()
@@ -55,6 +70,7 @@ func StartWebApp(ctx context.Context, db *sql.DB, queryLogsSQL string, addr stri
 	// API routes
 	mux.HandleFunc("GET /api/v1/healthz", s.getHealthzHandler)
 	mux.HandleFunc("GET /api/v1/logs", s.getLogsHandler)
+	mux.HandleFunc("GET /api/v1/traces", s.getTracesHandler)
 
 	server := &http.Server{
 		Addr:    addr,

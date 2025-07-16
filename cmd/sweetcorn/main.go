@@ -46,6 +46,7 @@ func main() {
 	insertLogsSQL := storage.RenderInsertLogsSQL(cfg)
 	insertTracesSQL := storage.RenderInsertTracesSQL(cfg)
 	queryLogsSQL := storage.RenderQueryLogsSQL(cfg)
+	queryTracesSQL := storage.RenderQueryTracesSQL(cfg)
 
 	// start servers
 	const httpAddr = ":4318"
@@ -61,7 +62,7 @@ func main() {
 		return otlp.StartGRPCServer(ctx, db, insertLogsSQL, insertTracesSQL, grpcAddr)
 	})
 	g.Go(func() error {
-		return app.StartWebApp(ctx, db, queryLogsSQL, appAddr)
+		return app.StartWebApp(ctx, db, queryLogsSQL, queryTracesSQL, appAddr)
 	})
 
 	if err := g.Wait(); err != nil {
