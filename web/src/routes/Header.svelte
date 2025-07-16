@@ -12,6 +12,11 @@
 			exact: false
 		},
 		{
+			path: '/traces',
+			title: 'Traces',
+			exact: false
+		},
+		{
 			path: '/about',
 			title: 'About'
 		}
