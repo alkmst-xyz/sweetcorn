@@ -1,8 +1,10 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -60,7 +62,57 @@ const (
     LinksTraceState,
     LinksAttributes
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
+
+	queryTracesSQLTemplate = `SELECT
+	TraceId,
+	SpanId,
+	ParentSpanId,
+	TraceState,
+	SpanName,
+	SpanKind,
+	ServiceName,
+	ResourceAttributes,
+	ScopeName,
+	ScopeVersion,
+	SpanAttributes,
+	Duration,
+	StatusCode,
+	StatusMessage,
+	EventsAttributes,
+	LinksAttributes
+FROM
+	%s
+ORDER BY
+	Timestamp DESC
+LIMIT
+	100;
+`
 )
+
+type TraceRecord struct {
+	// Timestamp          uint64      `json:"timestamp"`
+	TraceId            string         `json:"traceId"`
+	SpanId             string         `json:"spanId"`
+	ParentSpanId       string         `json:"parentSpanId"`
+	TraceState         string         `json:"traceState"`
+	SpanName           string         `json:"spanName"`
+	SpanKind           string         `json:"spanKind"`
+	ServiceName        string         `json:"serviceName"`
+	ResourceAttributes map[string]any `json:"resourceAttributes"`
+	ScopeName          string         `json:"scopeName"`
+	ScopeVersion       string         `json:"scopeVersion"`
+	SpanAttributes     map[string]any `json:"spanAttributes"`
+	Duration           uint64         `json:"duration"`
+	StatusCode         string         `json:"statusCode"`
+	StatusMessage      string         `json:"statusMessage"`
+	// EventsTimestamp    []uint64       `json:"eventsTimestamp"`
+	// EventsName         []string         `json:"eventsName"`
+	EventsAttributes map[string]any `json:"eventsAttributes"`
+	// LinksTraceId     []string       `json:"linksTraceId"`
+	// LinksSpanId      []string       `json:"linksSpanId"`
+	// LinksTraceState  []string       `json:"linksTraceState"`
+	LinksAttributes map[string]any `json:"linksAttributes"`
+}
 
 func convertEvents(events ptrace.SpanEventSlice) (times []time.Time, names []string, attrs []byte) {
 	var attrsRaw []pcommon.Map
@@ -100,6 +152,10 @@ func CreateTracesTable(ctx context.Context, cfg *Config, db *sql.DB) error {
 
 func RenderInsertTracesSQL(cfg *Config) string {
 	return fmt.Sprintf(insertTracesSQLTemplate, cfg.TracesTableName)
+}
+
+func RenderQueryTracesSQL(cfg *Config) string {
+	return fmt.Sprintf(queryTracesSQLTemplate, cfg.TracesTableName)
 }
 
 func InsertTracesData(ctx context.Context, db *sql.DB, insertSQL string, td ptrace.Traces) error {
@@ -152,4 +208,50 @@ func InsertTracesData(ctx context.Context, db *sql.DB, insertSQL string, td ptra
 	}
 
 	return nil
+}
+
+func QueryTraces(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]TraceRecord, error) {
+	rows, err := db.QueryContext(ctx, queryLogsSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]TraceRecord, 0)
+
+	for rows.Next() {
+		var result TraceRecord
+		var resourceAttrs, spanAttrs, eventAttrs, linkAttrs []byte
+
+		err := rows.Scan(
+			&result.TraceId,
+			&result.SpanId,
+			&result.ParentSpanId,
+			&result.TraceState,
+			&result.SpanName,
+			&result.SpanKind,
+			&result.ServiceName,
+			&resourceAttrs,
+			&result.ScopeName,
+			&result.ScopeVersion,
+			&spanAttrs,
+			&result.Duration,
+			&result.StatusCode,
+			&result.StatusMessage,
+			&eventAttrs,
+			&linkAttrs,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		_ = json.NewDecoder(bytes.NewReader(resourceAttrs)).Decode(&result.ResourceAttributes)
+		_ = json.NewDecoder(bytes.NewReader(spanAttrs)).Decode(&result.SpanAttributes)
+		_ = json.NewDecoder(bytes.NewReader(eventAttrs)).Decode(&result.EventsAttributes)
+		_ = json.NewDecoder(bytes.NewReader(linkAttrs)).Decode(&result.LinksAttributes)
+
+		results = append(results, result)
+	}
+
+	return results, nil
 }
