@@ -135,4 +135,4 @@ run: build ## Run the server
 .PHONY: run-ui
 run-ui:
 	@echo "[INFO] Running frontend..."
-	@cd web && pnpm dev
+	@cd web && fnm use && pnpm dev
