@@ -1,14 +1,12 @@
 package storage
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
 
-	_ "github.com/marcboeker/go-duckdb/v2"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
@@ -26,12 +24,12 @@ const (
 	ServiceName 		TEXT,
 	Body 				TEXT,
 	ResourceSchemaUrl 	TEXT,
-	ResourceAttributes	BLOB,
+	ResourceAttributes	JSON,
 	ScopeSchemaUrl 		TEXT,
 	ScopeName 			TEXT,
 	ScopeVersion 		TEXT,
-	ScopeAttributes 	BLOB,
-	LogAttributes 		BLOB,
+	ScopeAttributes 	JSON,
+	LogAttributes 		JSON,
 	PRIMARY KEY (ServiceName, Timestamp)
 );`
 
@@ -162,7 +160,6 @@ func QueryLogs(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]LogRecor
 
 	for rows.Next() {
 		var result LogRecord
-		var resourceAttrs, scopeAttrs, logAttrs []byte
 
 		err := rows.Scan(
 			&result.TimestampTime,
@@ -174,20 +171,16 @@ func QueryLogs(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]LogRecor
 			&result.ServiceName,
 			&result.Body,
 			&result.ResourceSchemaUrl,
-			&resourceAttrs,
+			&result.ResourceAttributes,
 			&result.ScopeSchemaUrl,
 			&result.ScopeName,
 			&result.ScopeVersion,
-			&scopeAttrs,
-			&logAttrs,
+			&result.ScopeAttributes,
+			&result.LogAttributes,
 		)
 		if err != nil {
 			return nil, err
 		}
-
-		_ = json.NewDecoder(bytes.NewReader(resourceAttrs)).Decode(&result.ResourceAttributes)
-		_ = json.NewDecoder(bytes.NewReader(scopeAttrs)).Decode(&result.ScopeAttributes)
-		_ = json.NewDecoder(bytes.NewReader(logAttrs)).Decode(&result.LogAttributes)
 
 		results = append(results, result)
 	}
