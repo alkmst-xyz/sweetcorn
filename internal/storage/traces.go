@@ -1,14 +1,11 @@
 package storage
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"time"
 
-	_ "github.com/marcboeker/go-duckdb/v2"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
@@ -23,20 +20,20 @@ const (
 	SpanName 			TEXT,
 	SpanKind 			TEXT,
 	ServiceName 		TEXT,
-	ResourceAttributes 	BLOB,
+	ResourceAttributes 	JSON,
 	ScopeName 			TEXT,
 	ScopeVersion 		TEXT,
-	SpanAttributes 		BLOB,
+	SpanAttributes 		JSON,
 	Duration 			UBIGINT,
 	StatusCode 			TEXT,
 	StatusMessage 		TEXT,
 	EventsTimestamp 	TIMESTAMP_NS[],
 	EventsName 			TEXT[],
-	EventsAttributes 	BLOB,
+	EventsAttributes 	JSON,
 	LinksTraceId 		TEXT[],
 	LinksSpanId 		TEXT[],
 	LinksTraceState 	TEXT[],
-	LinksAttributes 	BLOB
+	LinksAttributes 	JSON
 );`
 
 	insertTracesSQLTemplate = `INSERT INTO %s (
@@ -221,7 +218,7 @@ func QueryTraces(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]TraceR
 
 	for rows.Next() {
 		var result TraceRecord
-		var resourceAttrs, spanAttrs, eventAttrs, linkAttrs []byte
+		// var resourceAttrs, spanAttrs, eventAttrs, linkAttrs []byte
 
 		err := rows.Scan(
 			&result.TraceId,
@@ -231,24 +228,28 @@ func QueryTraces(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]TraceR
 			&result.SpanName,
 			&result.SpanKind,
 			&result.ServiceName,
-			&resourceAttrs,
+			// &resourceAttrs,
+			&result.ResourceAttributes,
 			&result.ScopeName,
 			&result.ScopeVersion,
-			&spanAttrs,
+			// &spanAttrs,
+			&result.SpanAttributes,
 			&result.Duration,
 			&result.StatusCode,
 			&result.StatusMessage,
-			&eventAttrs,
-			&linkAttrs,
+			// &eventAttrs,
+			&result.EventsAttributes,
+			// &linkAttrs,
+			&result.LinksAttributes,
 		)
 		if err != nil {
 			return nil, err
 		}
 
-		_ = json.NewDecoder(bytes.NewReader(resourceAttrs)).Decode(&result.ResourceAttributes)
-		_ = json.NewDecoder(bytes.NewReader(spanAttrs)).Decode(&result.SpanAttributes)
-		_ = json.NewDecoder(bytes.NewReader(eventAttrs)).Decode(&result.EventsAttributes)
-		_ = json.NewDecoder(bytes.NewReader(linkAttrs)).Decode(&result.LinksAttributes)
+		// _ = json.NewDecoder(bytes.NewReader(resourceAttrs)).Decode(&result.ResourceAttributes)
+		// _ = json.NewDecoder(bytes.NewReader(spanAttrs)).Decode(&result.SpanAttributes)
+		// _ = json.NewDecoder(bytes.NewReader(eventAttrs)).Decode(&result.EventsAttributes)
+		// _ = json.NewDecoder(bytes.NewReader(linkAttrs)).Decode(&result.LinksAttributes)
 
 		results = append(results, result)
 	}
