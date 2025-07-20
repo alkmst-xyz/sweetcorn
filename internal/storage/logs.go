@@ -120,6 +120,10 @@ func toISO8601(ts pcommon.Timestamp) string {
 }
 
 func jsonBlob(m map[string]any) []byte {
+	if m == nil {
+		return []byte("{}")
+	}
+
 	b, _ := json.Marshal(m)
 	return b
 }
