@@ -13,64 +13,65 @@ import (
 )
 
 const (
-	createLogsTableSQL = `CREATE TABLE IF NOT EXISTS %s (
-	Timestamp 			TIMESTAMP_NS,
-	TimestampTime 		TIMESTAMP GENERATED ALWAYS AS (CAST(Timestamp AS TIMESTAMP)),
-	TraceId				TEXT,
-	SpanId 				TEXT,
-	TraceFlags 			UTINYINT,
-	SeverityText 		TEXT,
-	SeverityNumber		UTINYINT,
-	ServiceName 		TEXT,
-	Body 				TEXT,
-	ResourceSchemaUrl 	TEXT,
-	ResourceAttributes	JSON,
-	ScopeSchemaUrl 		TEXT,
-	ScopeName 			TEXT,
-	ScopeVersion 		TEXT,
-	ScopeAttributes 	JSON,
-	LogAttributes 		JSON,
-	PRIMARY KEY (ServiceName, Timestamp)
+	createLogsTableSQL = `
+CREATE TABLE IF NOT EXISTS %s (
+	timestamp				TIMESTAMP_NS,
+	timestamp_time			TIMESTAMP_S GENERATED ALWAYS AS (CAST(Timestamp AS TIMESTAMP)),
+	trace_id				VARCHAR,
+	span_id					VARCHAR,
+	trace_flags				UTINYINT,
+	severity_text			VARCHAR,
+	severity_number			UTINYINT,
+	service_name			VARCHAR,
+	body					VARCHAR,
+	resource_schema_url		VARCHAR,
+	resource_attributes		JSON,
+	scope_schema_url 		VARCHAR,
+	scope_name				VARCHAR,
+	scope_version			VARCHAR,
+	scope_attributes		JSON,
+	log_attributes			JSON,
+	PRIMARY KEY (service_name, timestamp)
 );`
 
 	insertLogsSQLTemplate = `INSERT INTO %s (
-	Timestamp,
-	TraceId,
-	SpanId,
-	TraceFlags,
-	SeverityText,
-	SeverityNumber,
-	ServiceName,
-	Body,
-	ResourceSchemaUrl,
-	ResourceAttributes,
-	ScopeSchemaUrl,
-	ScopeName,
-	ScopeVersion,
-	ScopeAttributes,
-	LogAttributes
+	timestamp,
+	trace_id,
+	span_id,
+	trace_flags,
+	severity_text,
+	severity_number,
+	service_name,
+	body,
+	resource_schema_url,
+	resource_attributes,
+	scope_schema_url,
+	scope_name,
+	scope_version,
+	scope_attributes,
+	log_attributes
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
 	queryLogsSQLTemplate = `SELECT
-	TimestampTime,
-	TraceId,
-	SpanId,
-	TraceFlags,
-	SeverityText,
-	SeverityNumber,
-	ServiceName,
-	Body,
-	ResourceSchemaUrl,
-	ResourceAttributes,
-	ScopeSchemaUrl,
-	ScopeName,
-	ScopeVersion,
-	ScopeAttributes,
-	LogAttributes
+	timestamp_time,
+	trace_id,
+	span_id,
+	trace_flags,
+	severity_text,
+	severity_number,
+	service_name,
+	body,
+	resource_schema_url,
+	resource_attributes,
+	scope_schema_url,
+	scope_name,
+	scope_version,
+	scope_attributes,
+	log_attributes
 FROM
 	%s
 ORDER BY
-	Timestamp DESC
+	timestamp DESC
 LIMIT
 	100;
 `
