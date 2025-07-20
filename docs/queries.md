@@ -187,6 +187,36 @@ WHERE ServiceName = 'telemetrygen'
 Limit 100;
 ```
 
+## Indexes
+
+Add indexes to improve query performance.
+
+- Time range: "Show me logs from t1 to t2."
+- By service: "Show me all logs for ServiceName=X in a time range."
+- Trace/span correlation: "Show logs related to TraceId=abc123."
+- Search by attribute: "Show logs where LogAttributes->'user_id' = '123'."
+- Severity: "Show me ERROR logs only."
+
+```sql
+-- Time range
+CREATE INDEX IF NOT EXISTS idx_otel_logs_timestamp_time		ON otel_logs (timestamp_time);
+
+-- Trace/Span correlation
+CREATE INDEX IF NOT EXISTS idx_otel_logs_trace_id_span_id	ON otel_logs (trace_id, span_id);
+
+-- Severity
+CREATE INDEX IF NOT EXISTS idx_otel_logs_severity_number	ON otel_logs (severity_number);
+CREATE INDEX IF NOT EXISTS idx_otel_logs_service_name		ON otel_logs (service_name);
+```
+
+## TTL (time-to-live)
+
+```sql
+DELETE FROM "otel_logs"
+WHERE
+    CAST(timestamp_time AS TIMESTAMP) < NOW () - INTERVAL '30 days';
+```
+
 ## References
 
 1. [ClickHouse Exporter for OpenTelemetry Collector](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/clickhouseexporter)
