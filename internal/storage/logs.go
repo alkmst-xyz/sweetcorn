@@ -14,7 +14,10 @@ import (
 
 const (
 	createLogsTableSQL = `
+CREATE SEQUENCE IF NOT EXISTS otel_logs_id_seq;
+
 CREATE TABLE IF NOT EXISTS %s (
+	_id						BIGINT PRIMARY KEY DEFAULT nextval ('otel_logs_id_seq'),
 	timestamp				TIMESTAMP_NS,
 	timestamp_time			TIMESTAMP_S GENERATED ALWAYS AS (CAST(Timestamp AS TIMESTAMP)),
 	trace_id				VARCHAR,
@@ -30,8 +33,7 @@ CREATE TABLE IF NOT EXISTS %s (
 	scope_name				VARCHAR,
 	scope_version			VARCHAR,
 	scope_attributes		JSON,
-	log_attributes			JSON,
-	PRIMARY KEY (service_name, timestamp)
+	log_attributes			JSON
 );`
 
 	insertLogsSQLTemplate = `INSERT INTO %s (
@@ -71,7 +73,7 @@ CREATE TABLE IF NOT EXISTS %s (
 FROM
 	%s
 ORDER BY
-	timestamp DESC
+	timestamp_time DESC
 LIMIT
 	100;
 `
