@@ -6,109 +6,122 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/marcboeker/go-duckdb/v2"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
 const (
-	createTracesTableSQL = `CREATE TABLE IF NOT EXISTS %s (
-	Timestamp 			TIMESTAMP_NS,
-	TraceId				TEXT,
-	SpanId 				TEXT,
-	ParentSpanId 		TEXT,
-	TraceState 			TEXT,
-	SpanName 			TEXT,
-	SpanKind 			TEXT,
-	ServiceName 		TEXT,
-	ResourceAttributes 	JSON,
-	ScopeName 			TEXT,
-	ScopeVersion 		TEXT,
-	SpanAttributes 		JSON,
-	Duration 			UBIGINT,
-	StatusCode 			TEXT,
-	StatusMessage 		TEXT,
-	EventsTimestamp 	TIMESTAMP_NS[],
-	EventsName 			TEXT[],
-	EventsAttributes 	JSON,
-	LinksTraceId 		TEXT[],
-	LinksSpanId 		TEXT[],
-	LinksTraceState 	TEXT[],
-	LinksAttributes 	JSON
+	createTracesTableSQL = `
+CREATE SEQUENCE IF NOT EXISTS otel_traces_id_seq;
+
+CREATE TABLE IF NOT EXISTS %s (
+	_id						BIGINT PRIMARY KEY DEFAULT nextval ('otel_traces_id_seq'),
+	timestamp				TIMESTAMP_NS,
+	timestamp_time			TIMESTAMP_S GENERATED ALWAYS AS (CAST(Timestamp AS TIMESTAMP)),
+	trace_id				VARCHAR,
+	span_id					VARCHAR,
+	parent_span_id			VARCHAR,
+	trace_state				VARCHAR,
+	span_name				VARCHAR,
+	span_kind				VARCHAR,
+	service_name			VARCHAR,
+	resource_attributes		JSON,
+	scope_name				VARCHAR,
+	scope_version			VARCHAR,
+	span_attributes			JSON,
+	duration				UBIGINT,
+	status_code				VARCHAR,
+	status_message			VARCHAR,
+	events_timestamps		TIMESTAMP_NS[],
+	events_names			VARCHAR[],
+	events_attributes		JSON[],
+	links_trace_ids			VARCHAR[],
+	links_span_ids			VARCHAR[],
+	links_trace_states		VARCHAR[],
+	links_attributes		JSON[]
 );`
 
 	insertTracesSQLTemplate = `INSERT INTO %s (
-    Timestamp,
-    TraceId,
-    SpanId,
-    ParentSpanId,
-    TraceState,
-    SpanName,
-    SpanKind,
-    ServiceName,
-    ResourceAttributes,
-    ScopeName,
-    ScopeVersion,
-    SpanAttributes,
-    Duration,
-    StatusCode,
-    StatusMessage,
-    EventsName,
-    EventsAttributes,
-    LinksTraceId,
-    LinksSpanId,
-    LinksTraceState,
-    LinksAttributes
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
+	timestamp,
+	trace_id,
+	span_id,
+	parent_span_id,
+	trace_state,
+	span_name,
+	span_kind,
+	service_name,
+	resource_attributes,
+	scope_name,
+	scope_version,
+	span_attributes,
+	duration,
+	status_code,
+	status_message,
+	events_timestamps,
+	events_names,
+	events_attributes,
+	links_trace_ids,
+	links_span_ids,
+	links_trace_states,
+	links_attributes
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
 	queryTracesSQLTemplate = `SELECT
-	TraceId,
-	SpanId,
-	ParentSpanId,
-	TraceState,
-	SpanName,
-	SpanKind,
-	ServiceName,
-	ResourceAttributes,
-	ScopeName,
-	ScopeVersion,
-	SpanAttributes,
-	Duration,
-	StatusCode,
-	StatusMessage,
-	EventsAttributes,
-	LinksAttributes
+	timestamp_time,
+	trace_id,
+	span_id,
+	parent_span_id,
+	trace_state,
+	span_name,
+	span_kind,
+	service_name,
+	resource_attributes,
+	scope_name,
+	scope_version,
+	span_attributes,
+	duration,
+	status_code,
+	status_message,
+	events_timestamps,
+	events_names,
+	events_attributes,
+	links_trace_ids,
+	links_span_ids,
+	links_trace_states,
+	links_attributes
 FROM
 	%s
 ORDER BY
-	Timestamp DESC
+	timestamp_time DESC
 LIMIT
 	100;
 `
 )
 
 type TraceRecord struct {
-	// Timestamp          uint64      `json:"timestamp"`
-	TraceId            string         `json:"traceId"`
-	SpanId             string         `json:"spanId"`
-	ParentSpanId       string         `json:"parentSpanId"`
-	TraceState         string         `json:"traceState"`
-	SpanName           string         `json:"spanName"`
-	SpanKind           string         `json:"spanKind"`
-	ServiceName        string         `json:"serviceName"`
-	ResourceAttributes map[string]any `json:"resourceAttributes"`
-	ScopeName          string         `json:"scopeName"`
-	ScopeVersion       string         `json:"scopeVersion"`
-	SpanAttributes     map[string]any `json:"spanAttributes"`
-	Duration           uint64         `json:"duration"`
-	StatusCode         string         `json:"statusCode"`
-	StatusMessage      string         `json:"statusMessage"`
-	// EventsTimestamp    []uint64       `json:"eventsTimestamp"`
-	// EventsName         []string         `json:"eventsName"`
-	EventsAttributes map[string]any `json:"eventsAttributes"`
-	// LinksTraceId     []string       `json:"linksTraceId"`
-	// LinksSpanId      []string       `json:"linksSpanId"`
-	// LinksTraceState  []string       `json:"linksTraceState"`
-	LinksAttributes map[string]any `json:"linksAttributes"`
+	TimestampTime      time.Time                          `json:"timestamp"`
+	TraceId            string                             `json:"traceId"`
+	SpanId             string                             `json:"spanId"`
+	ParentSpanId       string                             `json:"parentSpanId"`
+	TraceState         string                             `json:"traceState"`
+	SpanName           string                             `json:"spanName"`
+	SpanKind           string                             `json:"spanKind"`
+	ServiceName        string                             `json:"serviceName"`
+	ResourceAttributes map[string]any                     `json:"resourceAttributes"`
+	ScopeName          string                             `json:"scopeName"`
+	ScopeVersion       string                             `json:"scopeVersion"`
+	SpanAttributes     map[string]any                     `json:"spanAttributes"`
+	Duration           uint64                             `json:"duration"`
+	StatusCode         string                             `json:"statusCode"`
+	StatusMessage      string                             `json:"statusMessage"`
+	EventsTimestamps   duckdb.Composite[[]uint64]         `json:"eventsTimestamps"`
+	EventsNames        duckdb.Composite[[]string]         `json:"eventsNames"`
+	EventsAttributes   duckdb.Composite[[]map[string]any] `json:"eventsAttributes"`
+	LinksTraceIds      duckdb.Composite[[]string]         `json:"linksTraceIds"`
+	LinksSpanIds       duckdb.Composite[[]string]         `json:"linksSpanIds"`
+	LinksTraceStates   duckdb.Composite[[]string]         `json:"linksTraceStates"`
+	LinksAttributes    duckdb.Composite[[]map[string]any] `json:"linksAttributes"`
 }
 
 func convertEvents(events ptrace.SpanEventSlice) (times []time.Time, names []string, attrs []byte) {
@@ -170,8 +183,13 @@ func InsertTracesData(ctx context.Context, db *sql.DB, insertSQL string, td ptra
 				r := rs.At(k)
 				spanAttr := attributesToBytes(r.Attributes())
 				status := r.Status()
-				_, eventNames, eventAttrs := convertEvents(r.Events())
-				linksTraceIDs, linksSpanIDs, linksTraceStates, linksAttrs := convertLinks(r.Links())
+
+				var eventTimes []time.Time
+				var eventAttrs []map[string]any
+				var linksAttrs []map[string]any
+
+				_, eventNames, _ := convertEvents(r.Events())
+				linksTraceIDs, linksSpanIDs, linksTraceStates, _ := convertLinks(r.Links())
 
 				_, err := db.ExecContext(ctx, insertSQL,
 					r.StartTimestamp().AsTime(),
@@ -189,7 +207,7 @@ func InsertTracesData(ctx context.Context, db *sql.DB, insertSQL string, td ptra
 					r.EndTimestamp().AsTime().Sub(r.StartTimestamp().AsTime()).Nanoseconds(),
 					status.Code().String(),
 					status.Message(),
-					// eventTimes,
+					eventTimes,
 					eventNames,
 					eventAttrs,
 					linksTraceIDs,
@@ -218,9 +236,9 @@ func QueryTraces(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]TraceR
 
 	for rows.Next() {
 		var result TraceRecord
-		// var resourceAttrs, spanAttrs, eventAttrs, linkAttrs []byte
 
 		err := rows.Scan(
+			&result.TimestampTime,
 			&result.TraceId,
 			&result.SpanId,
 			&result.ParentSpanId,
@@ -228,28 +246,25 @@ func QueryTraces(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]TraceR
 			&result.SpanName,
 			&result.SpanKind,
 			&result.ServiceName,
-			// &resourceAttrs,
 			&result.ResourceAttributes,
 			&result.ScopeName,
 			&result.ScopeVersion,
-			// &spanAttrs,
 			&result.SpanAttributes,
 			&result.Duration,
 			&result.StatusCode,
 			&result.StatusMessage,
-			// &eventAttrs,
+			&result.EventsTimestamps,
+			&result.EventsNames,
 			&result.EventsAttributes,
-			// &linkAttrs,
+			&result.LinksTraceIds,
+			&result.LinksSpanIds,
+			&result.LinksTraceStates,
 			&result.LinksAttributes,
 		)
+
 		if err != nil {
 			return nil, err
 		}
-
-		// _ = json.NewDecoder(bytes.NewReader(resourceAttrs)).Decode(&result.ResourceAttributes)
-		// _ = json.NewDecoder(bytes.NewReader(spanAttrs)).Decode(&result.SpanAttributes)
-		// _ = json.NewDecoder(bytes.NewReader(eventAttrs)).Decode(&result.EventsAttributes)
-		// _ = json.NewDecoder(bytes.NewReader(linkAttrs)).Decode(&result.LinksAttributes)
 
 		results = append(results, result)
 	}
