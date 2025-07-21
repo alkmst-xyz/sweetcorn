@@ -196,46 +196,62 @@ func QueryLogs(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]LogRecor
 }
 
 func InsertLogsData(ctx context.Context, db *sql.DB, insertSQL string, ld plog.Logs) error {
-	for i := range ld.ResourceLogs().Len() {
-		logs := ld.ResourceLogs().At(i)
+	rsLogs := ld.ResourceLogs()
+
+	for i := range rsLogs.Len() {
+		logs := rsLogs.At(i)
 		res := logs.Resource()
 		resURL := logs.SchemaUrl()
-		resAttr := attributesToBytes(res.Attributes())
-		serviceName := getServiceName(res.Attributes())
+		resAttr := res.Attributes()
+		serviceName := getServiceName(resAttr)
+
+		resAttrBytes, resAttrErr := json.Marshal(resAttr.AsRaw())
+		if resAttrErr != nil {
+			return fmt.Errorf("failed to marshal json log resource attributes: %w", resAttrErr)
+		}
 
 		for j := range logs.ScopeLogs().Len() {
-			rs := logs.ScopeLogs().At(j).LogRecords()
-			scopeURL := logs.ScopeLogs().At(j).SchemaUrl()
-			scopeName := logs.ScopeLogs().At(j).Scope().Name()
-			scopeVersion := logs.ScopeLogs().At(j).Scope().Version()
-			scopeAttr := attributesToBytes(logs.ScopeLogs().At(j).Scope().Attributes())
+			scopeLog := logs.ScopeLogs().At(j)
+			scopeURL := scopeLog.SchemaUrl()
+			scopeLogScope := scopeLog.Scope()
+			scopeName := scopeLog.Scope().Name()
+			scopeVersion := scopeLog.Scope().Version()
+			scopeLogRecords := scopeLog.LogRecords()
 
-			for k := range rs.Len() {
-				r := rs.At(k)
+			scopeAttrBytes, scopeAttrErr := json.Marshal(scopeLogScope.Attributes().AsRaw())
+			if scopeAttrErr != nil {
+				return fmt.Errorf("failed to marshal json log scope attributes: %w", scopeAttrErr)
+			}
+
+			for k := range scopeLogRecords.Len() {
+				r := scopeLogRecords.At(k)
+
+				logAttrBytes, logAttrErr := json.Marshal(r.Attributes().AsRaw())
+				if logAttrErr != nil {
+					return fmt.Errorf("failed to marshal json log attributes: %w", logAttrErr)
+				}
 
 				timestamp := r.Timestamp()
 				if timestamp == 0 {
 					timestamp = r.ObservedTimestamp()
 				}
 
-				logAttr := attributesToBytes(r.Attributes())
-
 				_, err := db.ExecContext(ctx, insertSQL,
-					toISO8601(timestamp),
-					traceIDToHexOrEmptyString(r.TraceID()),
-					spanIDToHexOrEmptyString(r.SpanID()),
-					uint32(r.Flags()),
+					timestamp.AsTime(),
+					r.TraceID().String(),
+					r.SpanID().String(),
+					uint8(r.Flags()),
 					r.SeverityText(),
-					int32(r.SeverityNumber()),
+					uint8(r.SeverityNumber()),
 					serviceName,
 					r.Body().AsString(),
 					resURL,
-					resAttr,
+					resAttrBytes,
 					scopeURL,
 					scopeName,
 					scopeVersion,
-					scopeAttr,
-					logAttr,
+					scopeAttrBytes,
+					logAttrBytes,
 				)
 				if err != nil {
 					return err

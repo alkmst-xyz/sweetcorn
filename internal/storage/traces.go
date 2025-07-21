@@ -3,11 +3,11 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/marcboeker/go-duckdb/v2"
-	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
@@ -124,28 +124,36 @@ type TraceRecord struct {
 	LinksAttributes    duckdb.Composite[[]map[string]any] `json:"linksAttributes"`
 }
 
-func convertEvents(events ptrace.SpanEventSlice) (times []time.Time, names []string, attrs []byte) {
-	var attrsRaw []pcommon.Map
+func convertEvents(events ptrace.SpanEventSlice) (times []time.Time, names, attrs []string, err error) {
 	for i := 0; i < events.Len(); i++ {
 		event := events.At(i)
 		times = append(times, event.Timestamp().AsTime())
 		names = append(names, event.Name())
-		attrsRaw = append(attrsRaw, event.Attributes())
+
+		eventAttrBytes, eventAttrErr := json.Marshal(event.Attributes().AsRaw())
+		if eventAttrErr != nil {
+			return nil, nil, nil, fmt.Errorf("failed to marshal json trace event attributes: %w", eventAttrErr)
+		}
+		attrs = append(attrs, string(eventAttrBytes))
 	}
-	attrs = attributesArrayToBytes(attrsRaw)
+
 	return
 }
 
-func convertLinks(links ptrace.SpanLinkSlice) (traceIDs []string, spanIDs []string, states []string, attrs []byte) {
-	var attrsRaw []pcommon.Map
+func convertLinks(links ptrace.SpanLinkSlice) (traceIDs, spanIDs, states, attrs []string, err error) {
 	for i := 0; i < links.Len(); i++ {
 		link := links.At(i)
-		traceIDs = append(traceIDs, traceIDToHexOrEmptyString(link.TraceID()))
-		spanIDs = append(spanIDs, spanIDToHexOrEmptyString(link.SpanID()))
+		traceIDs = append(traceIDs, link.TraceID().String())
+		spanIDs = append(spanIDs, link.SpanID().String())
 		states = append(states, link.TraceState().AsRaw())
-		attrsRaw = append(attrsRaw, link.Attributes())
+
+		linkAttrBytes, linkAttrErr := json.Marshal(link.Attributes().AsRaw())
+		if linkAttrErr != nil {
+			return nil, nil, nil, nil, fmt.Errorf("failed to marshal json trace link attributes: %w", linkAttrErr)
+		}
+		attrs = append(attrs, string(linkAttrBytes))
 	}
-	attrs = attributesArrayToBytes(attrsRaw)
+
 	return
 }
 
@@ -169,44 +177,63 @@ func RenderQueryTracesSQL(cfg *Config) string {
 }
 
 func InsertTracesData(ctx context.Context, db *sql.DB, insertSQL string, td ptrace.Traces) error {
-	for i := 0; i < td.ResourceSpans().Len(); i++ {
-		spans := td.ResourceSpans().At(i)
+	rsSpans := td.ResourceSpans()
+
+	for i := range rsSpans.Len() {
+		spans := rsSpans.At(i)
 		res := spans.Resource()
-		resAttr := attributesToBytes(res.Attributes())
-		serviceName := getServiceName(res.Attributes())
 
-		for j := 0; j < spans.ScopeSpans().Len(); j++ {
-			rs := spans.ScopeSpans().At(j).Spans()
-			scopeName := spans.ScopeSpans().At(j).Scope().Name()
-			scopeVersion := spans.ScopeSpans().At(j).Scope().Version()
-			for k := 0; k < rs.Len(); k++ {
-				r := rs.At(k)
-				spanAttr := attributesToBytes(r.Attributes())
-				status := r.Status()
+		resAttr := res.Attributes()
+		serviceName := getServiceName(resAttr)
+		resAttrBytes, resAttrErr := json.Marshal(resAttr.AsRaw())
+		if resAttrErr != nil {
+			return fmt.Errorf("failed to marshal json trace resource attributes: %w", resAttrErr)
+		}
 
-				var eventTimes []time.Time
-				var eventAttrs []map[string]any
-				var linksAttrs []map[string]any
+		for j := range spans.ScopeSpans().Len() {
+			scopeSpanRoot := spans.ScopeSpans().At(j)
+			scopeSpanScope := scopeSpanRoot.Scope()
+			scopeName := scopeSpanScope.Name()
+			scopeVersion := scopeSpanScope.Version()
+			scopeSpans := scopeSpanRoot.Spans()
 
-				_, eventNames, _ := convertEvents(r.Events())
-				linksTraceIDs, linksSpanIDs, linksTraceStates, _ := convertLinks(r.Links())
+			for k := range scopeSpans.Len() {
+				span := scopeSpans.At(k)
+				spanStatus := span.Status()
+
+				spanDurationNanos := span.EndTimestamp() - span.StartTimestamp()
+
+				spanAttrBytes, spanAttrErr := json.Marshal(span.Attributes().AsRaw())
+				if spanAttrErr != nil {
+					return fmt.Errorf("failed to marshal json trace span attributes: %w", spanAttrErr)
+				}
+
+				eventTimes, eventNames, eventAttrs, eventsErr := convertEvents(span.Events())
+				if eventsErr != nil {
+					return fmt.Errorf("failed to convert json trace events: %w", eventsErr)
+				}
+
+				linksTraceIDs, linksSpanIDs, linksTraceStates, linksAttrs, linksErr := convertLinks(span.Links())
+				if linksErr != nil {
+					return fmt.Errorf("failed to convert json trace links: %w", linksErr)
+				}
 
 				_, err := db.ExecContext(ctx, insertSQL,
-					r.StartTimestamp().AsTime(),
-					traceIDToHexOrEmptyString(r.TraceID()),
-					spanIDToHexOrEmptyString(r.SpanID()),
-					spanIDToHexOrEmptyString(r.ParentSpanID()),
-					r.TraceState().AsRaw(),
-					r.Name(),
-					r.Kind().String(),
+					span.StartTimestamp().AsTime(),
+					span.TraceID().String(),
+					span.SpanID().String(),
+					span.ParentSpanID().String(),
+					span.TraceState().AsRaw(),
+					span.Name(),
+					span.Kind().String(),
 					serviceName,
-					resAttr,
+					resAttrBytes,
 					scopeName,
 					scopeVersion,
-					spanAttr,
-					r.EndTimestamp().AsTime().Sub(r.StartTimestamp().AsTime()).Nanoseconds(),
-					status.Code().String(),
-					status.Message(),
+					spanAttrBytes,
+					spanDurationNanos,
+					spanStatus.Code().String(),
+					spanStatus.Message(),
 					eventTimes,
 					eventNames,
 					eventAttrs,
