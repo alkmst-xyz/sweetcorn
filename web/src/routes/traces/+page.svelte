@@ -14,6 +14,10 @@
 
 	const defaultColumns: ColumnDef<TraceRecord>[] = [
 		{
+			accessorKey: 'timestamp',
+			header: () => 'Timestamp'
+		},
+		{
 			accessorKey: 'traceId',
 			header: () => 'Trace Id'
 		},
@@ -72,9 +76,34 @@
 			header: () => 'Status Message'
 		},
 		{
+			accessorKey: 'eventsTimestamps',
+			cell: (info) => JSON.stringify(info.getValue()),
+			header: () => 'Events Timestamps'
+		},
+		{
+			accessorKey: 'eventsNames',
+			cell: (info) => JSON.stringify(info.getValue()),
+			header: () => 'Events Names'
+		},
+		{
 			accessorKey: 'eventsAttributes',
 			cell: (info) => JSON.stringify(info.getValue()),
 			header: () => 'Events Attributes'
+		},
+		{
+			accessorKey: 'linksTraceIds',
+			cell: (info) => JSON.stringify(info.getValue()),
+			header: () => 'Links Trace IDs'
+		},
+		{
+			accessorKey: 'linksSpanIds',
+			cell: (info) => JSON.stringify(info.getValue()),
+			header: () => 'Links Span IDs'
+		},
+		{
+			accessorKey: 'linksTraceStates',
+			cell: (info) => JSON.stringify(info.getValue()),
+			header: () => 'Links Trace States'
 		},
 		{
 			accessorKey: 'linksAttributes',
