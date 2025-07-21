@@ -100,28 +100,28 @@ LIMIT
 )
 
 type TraceRecord struct {
-	TimestampTime      time.Time                          `json:"timestamp"`
-	TraceId            string                             `json:"traceId"`
-	SpanId             string                             `json:"spanId"`
-	ParentSpanId       string                             `json:"parentSpanId"`
-	TraceState         string                             `json:"traceState"`
-	SpanName           string                             `json:"spanName"`
-	SpanKind           string                             `json:"spanKind"`
-	ServiceName        string                             `json:"serviceName"`
-	ResourceAttributes map[string]any                     `json:"resourceAttributes"`
-	ScopeName          string                             `json:"scopeName"`
-	ScopeVersion       string                             `json:"scopeVersion"`
-	SpanAttributes     map[string]any                     `json:"spanAttributes"`
-	Duration           uint64                             `json:"duration"`
-	StatusCode         string                             `json:"statusCode"`
-	StatusMessage      string                             `json:"statusMessage"`
-	EventsTimestamps   duckdb.Composite[[]uint64]         `json:"eventsTimestamps"`
-	EventsNames        duckdb.Composite[[]string]         `json:"eventsNames"`
-	EventsAttributes   duckdb.Composite[[]map[string]any] `json:"eventsAttributes"`
-	LinksTraceIds      duckdb.Composite[[]string]         `json:"linksTraceIds"`
-	LinksSpanIds       duckdb.Composite[[]string]         `json:"linksSpanIds"`
-	LinksTraceStates   duckdb.Composite[[]string]         `json:"linksTraceStates"`
-	LinksAttributes    duckdb.Composite[[]map[string]any] `json:"linksAttributes"`
+	TimestampTime      time.Time        `json:"timestamp"`
+	TraceId            string           `json:"traceId"`
+	SpanId             string           `json:"spanId"`
+	ParentSpanId       string           `json:"parentSpanId"`
+	TraceState         string           `json:"traceState"`
+	SpanName           string           `json:"spanName"`
+	SpanKind           string           `json:"spanKind"`
+	ServiceName        string           `json:"serviceName"`
+	ResourceAttributes map[string]any   `json:"resourceAttributes"`
+	ScopeName          string           `json:"scopeName"`
+	ScopeVersion       string           `json:"scopeVersion"`
+	SpanAttributes     map[string]any   `json:"spanAttributes"`
+	Duration           uint64           `json:"duration"`
+	StatusCode         string           `json:"statusCode"`
+	StatusMessage      string           `json:"statusMessage"`
+	EventsTimestamps   []time.Time      `json:"eventsTimestamps"`
+	EventsNames        []string         `json:"eventsNames"`
+	EventsAttributes   []map[string]any `json:"eventsAttributes"`
+	LinksTraceIds      []string         `json:"linksTraceIds"`
+	LinksSpanIds       []string         `json:"linksSpanIds"`
+	LinksTraceStates   []string         `json:"linksTraceStates"`
+	LinksAttributes    []map[string]any `json:"linksAttributes"`
 }
 
 func convertEvents(events ptrace.SpanEventSlice) (times []time.Time, names, attrs []string, err error) {
@@ -264,6 +264,15 @@ func QueryTraces(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]TraceR
 	for rows.Next() {
 		var result TraceRecord
 
+		var eventsTimestamps duckdb.Composite[[]time.Time]
+		var eventsNames duckdb.Composite[[]string]
+		var eventsAttributes duckdb.Composite[[]map[string]any]
+
+		var linksTraceIds duckdb.Composite[[]string]
+		var linksSpanIds duckdb.Composite[[]string]
+		var linksTraceStates duckdb.Composite[[]string]
+		var linksAttributes duckdb.Composite[[]map[string]any]
+
 		err := rows.Scan(
 			&result.TimestampTime,
 			&result.TraceId,
@@ -280,18 +289,27 @@ func QueryTraces(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]TraceR
 			&result.Duration,
 			&result.StatusCode,
 			&result.StatusMessage,
-			&result.EventsTimestamps,
-			&result.EventsNames,
-			&result.EventsAttributes,
-			&result.LinksTraceIds,
-			&result.LinksSpanIds,
-			&result.LinksTraceStates,
-			&result.LinksAttributes,
+			&eventsTimestamps,
+			&eventsNames,
+			&eventsAttributes,
+			&linksTraceIds,
+			&linksSpanIds,
+			&linksTraceStates,
+			&linksAttributes,
 		)
 
 		if err != nil {
 			return nil, err
 		}
+
+		result.EventsTimestamps = eventsTimestamps.Get()
+		result.EventsNames = eventsNames.Get()
+		result.EventsAttributes = eventsAttributes.Get()
+
+		result.LinksTraceIds = linksTraceIds.Get()
+		result.LinksSpanIds = linksSpanIds.Get()
+		result.LinksTraceStates = linksTraceStates.Get()
+		result.LinksAttributes = linksAttributes.Get()
 
 		results = append(results, result)
 	}
