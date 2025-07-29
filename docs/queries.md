@@ -5,80 +5,112 @@
 - [x] Get log severity count time series.
 
 ```sql
-SELECT TimestampTime as time, SeverityText, count() as count
-FROM otel_logs
-WHERE time >= NOW() - INTERVAL 1 HOUR
-GROUP BY SeverityText, time
-ORDER BY time;
+SELECT
+    timestamp_time as time,
+    severity_text,
+    count() as count
+FROM
+    otel_logs
+WHERE
+    CAST(time AS TIMESTAMP) >= NOW() - INTERVAL '1 hour'
+GROUP BY
+    severity_text,
+    time
+ORDER BY
+    time;
 ```
 
 - [x] Find any log.
 
 ```sql
-SELECT Timestamp as log_time, Body
-FROM otel_logs
-WHERE TimestampTime >= NOW() - INTERVAL 1 HOUR
-Limit 100;
+SELECT
+    timestamp,
+    body
+FROM
+    otel_logs
+WHERE
+    CAST(timestamp AS TIMESTAMP) >= NOW() - INTERVAL '1 hour'
+LIMIT
+    100;
 ```
 
 - [x] Find log with specific service.
 
 ```sql
-SELECT Timestamp as log_time, Body
-FROM otel_logs
-WHERE ServiceName = 'telemetrygen'
-  AND TimestampTime >= NOW() - INTERVAL 1 HOUR
-Limit 100;
+SELECT
+    timestamp,
+    body
+FROM
+    otel_logs
+WHERE
+    service_name = 'telemetrygen'
+    AND CAST(timestamp AS TIMESTAMP) >= NOW() - INTERVAL '1 hour'
+LIMIT
+    100;
 ```
 
-- [ ] Find log with specific attribute.
+- [x] Find log with specific attribute.
+
+[DuckDB - JSON functions](https://duckdb.org/docs/stable/data/json/json_functions)
 
 ```sql
-SELECT Timestamp as log_time, Body
-FROM otel_logs
-WHERE LogAttributes['container_name'] = '/example_flog_1'
-  AND TimestampTime >= NOW() - INTERVAL 1 HOUR
-Limit 100;
+SELECT
+    timestamp,
+    body
+FROM
+    otel_logs
+WHERE
+    (log_attributes->>'$.app') = 'server'
+    AND CAST(timestamp AS TIMESTAMP) >= NOW() - INTERVAL '1 hour'
+LIMIT
+    100;
 ```
 
-- [ ] Find log with body contain string token.
+- [x] Find log with body contain string token.
 
 ```sql
-SELECT Timestamp as log_time, Body
-FROM otel_logs
-WHERE 'message' IN Body
-  AND TimestampTime >= NOW() - INTERVAL 1 HOUR
-Limit 100;
+SELECT
+    timestamp,
+    body
+FROM
+    otel_logs
+WHERE
+    'message' IN body
+    AND CAST(timestamp AS TIMESTAMP) >= NOW() - INTERVAL '1 hour'
+LIMIT
+    100;
 ```
 
-- [ ] Find log with body contain string.
+- [x] Find log with body contain string.
 
 ```sql
-SELECT Timestamp as log_time, Body
-FROM otel_logs
-WHERE Body LIKE '%mes%'
-  AND TimestampTime >= NOW() - INTERVAL 1 HOUR
-Limit 100;
+SELECT
+    timestamp,
+    body
+FROM
+    otel_logs
+WHERE
+    body LIKE '%mes%'
+    AND CAST(timestamp AS TIMESTAMP) >= NOW() - INTERVAL '1 hour'
+LIMIT
+    100;
 ```
 
 - [x] Find log with body regexp match string.
 
-```sql
-SELECT Timestamp as log_time, Body
-FROM otel_logs
-WHERE BODY GLOB '*'
-  AND TimestampTime >= NOW() - INTERVAL 1 HOUR
-Limit 100;
-```
-
-- [ ] Find log with body json extract.
+[DuckDB - Pattern matching](https://duckdb.org/docs/stable/sql/functions/pattern_matching)
 
 ```sql
-SELECT Timestamp as log_time, Body
-FROM otel_logs
-WHERE JSONExtractFloat(Body, 'bytes') > 1000
-  AND TimestampTime >= NOW() - INTERVAL 1 HOUR
-Limit 100;
+SELECT
+    timestamp,
+    body
+FROM
+    otel_logs
+WHERE
+    BODY GLOB '*message*'
+    AND CAST(timestamp AS TIMESTAMP) >= NOW() - INTERVAL '1 hour'
+LIMIT
+    100;
 ```
 
 ## Traces
@@ -87,28 +119,166 @@ Limit 100;
 
 ```sql
 SELECT
-    Timestamp,
-    TraceId,
-    SpanId,
-    ParentSpanId,
-    SpanName,
-    SpanKind,
-    ServiceName,
-    Duration,
-    StatusCode,
-    StatusMessage,
-    SpanAttributes,
-    ResourceAttributes,
-    EventsName,
-    LinksTraceId
-FROM otel_traces
-WHERE ServiceName = 'telemetrygen'
-  -- AND SpanAttributes['peer.service'] = 'telemetrygen-server'
-  -- AND Timestamp >= NOW() - INTERVAL 1 HOUR
-Limit 100;
+    timestamp,
+    trace_id,
+    span_id,
+    parent_span_id,
+    trace_state,
+    span_name,
+    span_kind,
+    service_name,
+    resource_attributes,
+    scope_name,
+    scope_version,
+    span_attributes,
+    duration,
+    status_code,
+    status_message,
+    events_timestamps,
+    events_names,
+    events_attributes,
+    links_trace_ids,
+    links_span_ids,
+    links_trace_states,
+    links_attributes
+FROM
+    otel_traces
+WHERE
+    service_name = 'telemetrygen'
+    AND (span_attributes->>'$."peer.service"') = 'telemetrygen-server'
+    AND CAST(timestamp AS TIMESTAMP) >= NOW() - INTERVAL '1 hour'
+LIMIT
+    100;
+```
+
+- [x] Find spans is error.
+
+```sql
+SELECT
+    timestamp,
+    trace_id,
+    span_id,
+    parent_span_id,
+    trace_state,
+    span_name,
+    span_kind,
+    service_name,
+    resource_attributes,
+    scope_name,
+    scope_version,
+    span_attributes,
+    duration,
+    status_code,
+    status_message,
+    events_timestamps,
+    events_names,
+    events_attributes,
+    links_trace_ids,
+    links_span_ids,
+    links_trace_states,
+    links_attributes
+FROM
+    otel_traces
+WHERE
+    service_name = 'telemetrygen'
+    AND status_code = 'Unset'
+    AND CAST(timestamp AS TIMESTAMP) >= NOW() - INTERVAL '1 hour'
+LIMIT
+    100;
+```
+
+- [x] Find slow spans.
+
+```sql
+SELECT
+    timestamp,
+    trace_id,
+    span_id,
+    parent_span_id,
+    trace_state,
+    span_name,
+    span_kind,
+    service_name,
+    resource_attributes,
+    scope_name,
+    scope_version,
+    span_attributes,
+    duration,
+    status_code,
+    status_message,
+    events_timestamps,
+    events_names,
+    events_attributes,
+    links_trace_ids,
+    links_span_ids,
+    links_trace_states,
+    links_attributes
+FROM
+    otel_traces
+WHERE
+    service_name = 'telemetrygen'
+    AND duration > 1 * 1e5
+    AND CAST(timestamp AS TIMESTAMP) >= NOW() - INTERVAL '1 hour'
+LIMIT
+    100;
+```
+
+- [x] Search all spans by operation.
+
+```sql
+SELECT
+    timestamp,
+    trace_id,
+    span_id,
+    parent_span_id,
+    trace_state,
+    span_name,
+    span_kind,
+    service_name,
+    resource_attributes,
+    scope_name,
+    scope_version,
+    span_attributes,
+    duration,
+    status_code,
+    status_message,
+    events_timestamps,
+    events_names,
+    events_attributes,
+    links_trace_ids,
+    links_span_ids,
+    links_trace_states,
+    links_attributes
+FROM
+    otel_traces
+WHERE
+    span_name = 'okey-dokey-0'
+    AND CAST(timestamp AS TIMESTAMP) >= NOW() - INTERVAL '1 hour'
+LIMIT
+    100;
+```
+
+- [x] Retrieve all distinct services.
+
+```sql
+SELECT DISTINCT
+    service_name
+FROM
+    otel_traces;
+```
+
+- [x] Retrieve all distinct operations.
+
+```sql
+SELECT DISTINCT
+    span_name
+FROM
+    otel_traces;
 ```
 
 - [ ] Find traces with traceID (using time primary index and TraceID skip index).
+
+TODO: requires dedicated `otel_traces_trace_id_ts` table.
 
 ```sql
 WITH
@@ -134,56 +304,6 @@ FROM otel_traces
 WHERE TraceId = trace_id
   AND Timestamp >= start
   AND Timestamp <= end
-Limit 100;
-```
-
-- [x] Find spans is error.
-
-```sql
-SELECT
-    Timestamp,
-    TraceId,
-    SpanId,
-    ParentSpanId,
-    SpanName,
-    SpanKind,
-    ServiceName,
-    Duration,
-    StatusCode,
-    StatusMessage,
-    SpanAttributes,
-    ResourceAttributes,
-    EventsName,
-    LinksTraceId
-FROM otel_traces
-WHERE ServiceName = 'telemetrygen'
-  AND StatusCode = 'Unset'
-  -- AND Timestamp >= NOW() - INTERVAL 1 HOUR
-Limit 100;
-```
-
-- [x] Find slow spans.
-
-```sql
-SELECT
-    Timestamp,
-    TraceId,
-    SpanId,
-    ParentSpanId,
-    SpanName,
-    SpanKind,
-    ServiceName,
-    Duration,
-    StatusCode,
-    StatusMessage,
-    SpanAttributes,
-    ResourceAttributes,
-    EventsName,
-    LinksTraceId
-FROM otel_traces
-WHERE ServiceName = 'telemetrygen'
-  AND Duration > 1 * 1e9
-  -- AND Timestamp >= NOW() - INTERVAL 1 HOUR
 Limit 100;
 ```
 
