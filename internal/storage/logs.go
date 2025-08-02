@@ -116,12 +116,6 @@ func CreateLogsTable(ctx context.Context, cfg *Config, db *sql.DB) error {
 	return nil
 }
 
-// Convert nanoseconds since epoch to time.Time
-func toISO8601(ts pcommon.Timestamp) string {
-	t := time.Unix(0, int64(ts)).UTC()
-	return t.Format(time.RFC3339Nano)
-}
-
 func jsonBlob(m map[string]any) []byte {
 	if m == nil {
 		return []byte("{}")
