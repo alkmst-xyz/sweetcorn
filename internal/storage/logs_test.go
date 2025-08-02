@@ -7,6 +7,9 @@ import (
 	"time"
 
 	_ "github.com/marcboeker/go-duckdb/v2"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/plog"
+	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
 )
 
 func withTestDB(t *testing.T, tableName string, fn func(ctx context.Context, cfg *Config, db *sql.DB)) {
@@ -30,74 +33,33 @@ func withTestDB(t *testing.T, tableName string, fn func(ctx context.Context, cfg
 	fn(ctx, cfg, db)
 }
 
-func sampleLog() LogRecord {
-	return LogRecord{
-		TimestampTime:     time.Now(),
-		TraceId:           "trace",
-		SpanId:            "span",
-		TraceFlags:        1,
-		SeverityText:      "INFO",
-		SeverityNumber:    9,
-		ServiceName:       "test-service",
-		Body:              "body",
-		ResourceSchemaUrl: "http://resource",
-		ResourceAttributes: map[string]any{
-			"k": "v",
-		},
-		ScopeSchemaUrl: "http://scope",
-		ScopeName:      "scope",
-		ScopeVersion:   "v1",
-		ScopeAttributes: map[string]any{
-			"scope": "attr",
-		},
-		LogAttributes: map[string]any{
-			"env": "test",
-		},
+func generateSampleLogs(count int) plog.Logs {
+	logs := plog.NewLogs()
+
+	rl := logs.ResourceLogs().AppendEmpty()
+	rl.SetSchemaUrl("https://opentelemetry.io/schemas/1.4.0")
+	rl.Resource().Attributes().PutStr("service.name", "test-service2")
+	sl := rl.ScopeLogs().AppendEmpty()
+	sl.SetSchemaUrl("https://opentelemetry.io/schemas/1.7.0")
+	sl.Scope().SetName("duckdb")
+	sl.Scope().SetVersion("1.0.0")
+	sl.Scope().Attributes().PutStr("lib", "duckdb")
+	timestamp := time.Now()
+
+	for i := range count {
+		r := sl.LogRecords().AppendEmpty()
+		r.SetTimestamp(pcommon.NewTimestampFromTime(timestamp))
+		r.SetObservedTimestamp(pcommon.NewTimestampFromTime(timestamp))
+		r.SetSeverityNumber(plog.SeverityNumberError2)
+		r.SetSeverityText("error")
+		r.Body().SetStr("error message")
+		r.Attributes().PutStr(string(semconv.ServiceNamespaceKey), "default")
+		r.SetFlags(plog.DefaultLogRecordFlags)
+		r.SetTraceID([16]byte{1, 2, 3, byte(i)})
+		r.SetSpanID([8]byte{1, 2, 3, byte(i)})
 	}
-}
 
-func TestInsertAndQuery_ValidLog(t *testing.T) {
-	withTestDB(t, "logs_valid_test", func(ctx context.Context, cfg *Config, db *sql.DB) {
-		log := sampleLog()
-
-		if err := insertLog(ctx, cfg, db, log); err != nil {
-			t.Fatalf("insertLog failed: %v", err)
-		}
-
-		queryLogsSQL := RenderQueryLogsSQL(cfg)
-		results, err := QueryLogs(ctx, db, queryLogsSQL)
-		if err != nil {
-			t.Fatalf("queryLogs failed: %v", err)
-		}
-
-		if len(results) != 1 {
-			t.Fatalf("expected 1 result, got %d", len(results))
-		}
-
-		got := results[0]
-		if got.ServiceName != log.ServiceName {
-			t.Errorf("expected service name %s, got %s", log.ServiceName, got.ServiceName)
-		}
-	})
-}
-
-func TestInsertLog_EmptyAttributes(t *testing.T) {
-	withTestDB(t, "logs_empty_attr_test", func(ctx context.Context, cfg *Config, db *sql.DB) {
-		log := sampleLog()
-		log.ResourceAttributes = nil
-		log.ScopeAttributes = nil
-		log.LogAttributes = nil
-
-		if err := insertLog(ctx, cfg, db, log); err != nil {
-			t.Fatalf("insertLog failed: %v", err)
-		}
-
-		queryLogsSQL := RenderQueryLogsSQL(cfg)
-		results, _ := QueryLogs(ctx, db, queryLogsSQL)
-		if len(results) != 1 {
-			t.Fatal("expected 1 result for empty attributes")
-		}
-	})
+	return logs
 }
 
 func TestOpenDB_InvalidDSN(t *testing.T) {
@@ -131,13 +93,72 @@ func TestQueryLogs_WithoutTable(t *testing.T) {
 	}
 }
 
-func TestInsertOtelLogs(t *testing.T) {
-	withTestDB(t, "insert_otel_logs", func(ctx context.Context, cfg *Config, db *sql.DB) {
-		logs := SimpleLogs(1)
+func TestInsertLogsData(t *testing.T) {
+	withTestDB(t, "insert_logs", func(ctx context.Context, cfg *Config, db *sql.DB) {
+		logs := generateSampleLogs(1)
 		insertLogsSQL := RenderInsertLogsSQL(cfg)
 
 		if err := InsertLogsData(ctx, db, insertLogsSQL, logs); err != nil {
 			t.Fatalf("insertLog failed: %v", err)
 		}
+	})
+}
+
+func TestInsertLogsDataAndQuery(t *testing.T) {
+	withTestDB(t, "insert_logs_and_query", func(ctx context.Context, cfg *Config, db *sql.DB) {
+		numLogs := 10
+		logs := generateSampleLogs(numLogs)
+		insertLogsSQL := RenderInsertLogsSQL(cfg)
+		queryLogsSQL := RenderQueryLogsSQL(cfg)
+
+		if err := InsertLogsData(ctx, db, insertLogsSQL, logs); err != nil {
+			t.Fatalf("InsertLogsData failed: %v", err)
+		}
+
+		results, err := QueryLogs(ctx, db, queryLogsSQL)
+		if err != nil {
+			t.Fatalf("QueryLogs failed: %v", err)
+		}
+
+		if len(results) != numLogs {
+			t.Fatalf("Expected %d result, got %d", numLogs, len(results))
+		}
+
+		gotServiceName := results[0].ServiceName
+		expectedServiceName := getServiceName(logs.ResourceLogs().At(0).Resource().Attributes())
+		if gotServiceName != expectedServiceName {
+			t.Errorf("Expected service name %s, got %s.", expectedServiceName, gotServiceName)
+		}
+	})
+}
+
+func InsertLogsDataWithEmptyAttributes(t *testing.T) {
+	withTestDB(t, "insert_logs_with_empty_attributes", func(ctx context.Context, cfg *Config, db *sql.DB) {
+		numLogs := 1
+		logs := generateSampleLogs(numLogs)
+		insertLogsSQL := RenderInsertLogsSQL(cfg)
+		queryLogsSQL := RenderQueryLogsSQL(cfg)
+
+		resLog := logs.ResourceLogs().At(0)
+		scopeLog := resLog.ScopeLogs().At(0)
+		scopeLogRecords := scopeLog.LogRecords().At(0)
+
+		resLog.Resource().Attributes().Clear()
+		scopeLog.Scope().Attributes().Clear()
+		scopeLogRecords.Attributes().Clear()
+
+		if err := InsertLogsData(ctx, db, insertLogsSQL, logs); err != nil {
+			t.Fatalf("InsertLogsData failed: %v", err)
+		}
+
+		results, err := QueryLogs(ctx, db, queryLogsSQL)
+		if err != nil {
+			t.Fatalf("QueryLogs failed: %v", err)
+		}
+
+		if len(results) != numLogs {
+			t.Fatalf("Expected %d result, got %d", numLogs, len(results))
+		}
+
 	})
 }

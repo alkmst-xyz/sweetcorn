@@ -1,78 +1,77 @@
 package storage
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
 
-	_ "github.com/marcboeker/go-duckdb/v2"
-	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
-	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
 )
 
 const (
-	createLogsTableSQL = `CREATE TABLE IF NOT EXISTS %s (
-	Timestamp 			TIMESTAMP_NS,
-	TimestampTime 		TIMESTAMP GENERATED ALWAYS AS (CAST(Timestamp AS TIMESTAMP)),
-	TraceId				TEXT,
-	SpanId 				TEXT,
-	TraceFlags 			UTINYINT,
-	SeverityText 		TEXT,
-	SeverityNumber		UTINYINT,
-	ServiceName 		TEXT,
-	Body 				TEXT,
-	ResourceSchemaUrl 	TEXT,
-	ResourceAttributes	BLOB,
-	ScopeSchemaUrl 		TEXT,
-	ScopeName 			TEXT,
-	ScopeVersion 		TEXT,
-	ScopeAttributes 	BLOB,
-	LogAttributes 		BLOB,
-	PRIMARY KEY (ServiceName, Timestamp)
+	createLogsTableSQL = `
+CREATE SEQUENCE IF NOT EXISTS otel_logs_id_seq;
+
+CREATE TABLE IF NOT EXISTS %s (
+	id						BIGINT PRIMARY KEY DEFAULT nextval ('otel_logs_id_seq'),
+	timestamp				TIMESTAMP_NS,
+	timestamp_time			TIMESTAMP_S GENERATED ALWAYS AS (CAST(Timestamp AS TIMESTAMP)),
+	trace_id				VARCHAR,
+	span_id					VARCHAR,
+	trace_flags				UTINYINT,
+	severity_text			VARCHAR,
+	severity_number			UTINYINT,
+	service_name			VARCHAR,
+	body					VARCHAR,
+	resource_schema_url		VARCHAR,
+	resource_attributes		JSON,
+	scope_schema_url 		VARCHAR,
+	scope_name				VARCHAR,
+	scope_version			VARCHAR,
+	scope_attributes		JSON,
+	log_attributes			JSON
 );`
 
 	insertLogsSQLTemplate = `INSERT INTO %s (
-	Timestamp,
-	TraceId,
-	SpanId,
-	TraceFlags,
-	SeverityText,
-	SeverityNumber,
-	ServiceName,
-	Body,
-	ResourceSchemaUrl,
-	ResourceAttributes,
-	ScopeSchemaUrl,
-	ScopeName,
-	ScopeVersion,
-	ScopeAttributes,
-	LogAttributes
+	timestamp,
+	trace_id,
+	span_id,
+	trace_flags,
+	severity_text,
+	severity_number,
+	service_name,
+	body,
+	resource_schema_url,
+	resource_attributes,
+	scope_schema_url,
+	scope_name,
+	scope_version,
+	scope_attributes,
+	log_attributes
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
 	queryLogsSQLTemplate = `SELECT
-	TimestampTime,
-	TraceId,
-	SpanId,
-	TraceFlags,
-	SeverityText,
-	SeverityNumber,
-	ServiceName,
-	Body,
-	ResourceSchemaUrl,
-	ResourceAttributes,
-	ScopeSchemaUrl,
-	ScopeName,
-	ScopeVersion,
-	ScopeAttributes,
-	LogAttributes
+	timestamp,
+	trace_id,
+	span_id,
+	trace_flags,
+	severity_text,
+	severity_number,
+	service_name,
+	body,
+	resource_schema_url,
+	resource_attributes,
+	scope_schema_url,
+	scope_name,
+	scope_version,
+	scope_attributes,
+	log_attributes
 FROM
 	%s
 ORDER BY
-	Timestamp DESC
+	timestamp DESC
 LIMIT
 	100;
 `
@@ -91,7 +90,7 @@ func RenderQueryLogsSQL(cfg *Config) string {
 }
 
 type LogRecord struct {
-	TimestampTime      time.Time      `json:"timestamp"`
+	Timestamp          time.Time      `json:"timestamp"`
 	TraceId            string         `json:"traceId"`
 	SpanId             string         `json:"spanId"`
 	TraceFlags         uint8          `json:"traceFlags"`
@@ -115,42 +114,6 @@ func CreateLogsTable(ctx context.Context, cfg *Config, db *sql.DB) error {
 	return nil
 }
 
-// Convert nanoseconds since epoch to time.Time
-func toISO8601(ts pcommon.Timestamp) string {
-	t := time.Unix(0, int64(ts)).UTC()
-	return t.Format(time.RFC3339Nano)
-}
-
-func jsonBlob(m map[string]any) []byte {
-	b, _ := json.Marshal(m)
-	return b
-}
-
-// deprecated
-func insertLog(ctx context.Context, cfg *Config, db *sql.DB, logRecord LogRecord) error {
-	insertLogsSQL := RenderInsertLogsSQL(cfg)
-
-	_, err := db.ExecContext(ctx, insertLogsSQL,
-		logRecord.TimestampTime,
-		logRecord.TraceId,
-		logRecord.SpanId,
-		logRecord.TraceFlags,
-		logRecord.SeverityText,
-		logRecord.SeverityNumber,
-		logRecord.ServiceName,
-		logRecord.Body,
-		logRecord.ResourceSchemaUrl,
-		jsonBlob(logRecord.ResourceAttributes),
-		logRecord.ScopeSchemaUrl,
-		logRecord.ScopeName,
-		logRecord.ScopeVersion,
-		jsonBlob(logRecord.ScopeAttributes),
-		jsonBlob(logRecord.LogAttributes),
-	)
-
-	return err
-}
-
 func QueryLogs(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]LogRecord, error) {
 	rows, err := db.QueryContext(ctx, queryLogsSQL)
 	if err != nil {
@@ -162,10 +125,9 @@ func QueryLogs(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]LogRecor
 
 	for rows.Next() {
 		var result LogRecord
-		var resourceAttrs, scopeAttrs, logAttrs []byte
 
 		err := rows.Scan(
-			&result.TimestampTime,
+			&result.Timestamp,
 			&result.TraceId,
 			&result.SpanId,
 			&result.TraceFlags,
@@ -174,20 +136,16 @@ func QueryLogs(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]LogRecor
 			&result.ServiceName,
 			&result.Body,
 			&result.ResourceSchemaUrl,
-			&resourceAttrs,
+			&result.ResourceAttributes,
 			&result.ScopeSchemaUrl,
 			&result.ScopeName,
 			&result.ScopeVersion,
-			&scopeAttrs,
-			&logAttrs,
+			&result.ScopeAttributes,
+			&result.LogAttributes,
 		)
 		if err != nil {
 			return nil, err
 		}
-
-		_ = json.NewDecoder(bytes.NewReader(resourceAttrs)).Decode(&result.ResourceAttributes)
-		_ = json.NewDecoder(bytes.NewReader(scopeAttrs)).Decode(&result.ScopeAttributes)
-		_ = json.NewDecoder(bytes.NewReader(logAttrs)).Decode(&result.LogAttributes)
 
 		results = append(results, result)
 	}
@@ -196,46 +154,62 @@ func QueryLogs(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]LogRecor
 }
 
 func InsertLogsData(ctx context.Context, db *sql.DB, insertSQL string, ld plog.Logs) error {
-	for i := range ld.ResourceLogs().Len() {
-		logs := ld.ResourceLogs().At(i)
+	rsLogs := ld.ResourceLogs()
+
+	for i := range rsLogs.Len() {
+		logs := rsLogs.At(i)
 		res := logs.Resource()
 		resURL := logs.SchemaUrl()
-		resAttr := attributesToBytes(res.Attributes())
-		serviceName := getServiceName(res.Attributes())
+		resAttr := res.Attributes()
+		serviceName := getServiceName(resAttr)
+
+		resAttrBytes, resAttrErr := json.Marshal(resAttr.AsRaw())
+		if resAttrErr != nil {
+			return fmt.Errorf("failed to marshal json log resource attributes: %w", resAttrErr)
+		}
 
 		for j := range logs.ScopeLogs().Len() {
-			rs := logs.ScopeLogs().At(j).LogRecords()
-			scopeURL := logs.ScopeLogs().At(j).SchemaUrl()
-			scopeName := logs.ScopeLogs().At(j).Scope().Name()
-			scopeVersion := logs.ScopeLogs().At(j).Scope().Version()
-			scopeAttr := attributesToBytes(logs.ScopeLogs().At(j).Scope().Attributes())
+			scopeLog := logs.ScopeLogs().At(j)
+			scopeURL := scopeLog.SchemaUrl()
+			scopeLogScope := scopeLog.Scope()
+			scopeName := scopeLog.Scope().Name()
+			scopeVersion := scopeLog.Scope().Version()
+			scopeLogRecords := scopeLog.LogRecords()
 
-			for k := range rs.Len() {
-				r := rs.At(k)
+			scopeAttrBytes, scopeAttrErr := json.Marshal(scopeLogScope.Attributes().AsRaw())
+			if scopeAttrErr != nil {
+				return fmt.Errorf("failed to marshal json log scope attributes: %w", scopeAttrErr)
+			}
+
+			for k := range scopeLogRecords.Len() {
+				r := scopeLogRecords.At(k)
+
+				logAttrBytes, logAttrErr := json.Marshal(r.Attributes().AsRaw())
+				if logAttrErr != nil {
+					return fmt.Errorf("failed to marshal json log attributes: %w", logAttrErr)
+				}
 
 				timestamp := r.Timestamp()
 				if timestamp == 0 {
 					timestamp = r.ObservedTimestamp()
 				}
 
-				logAttr := attributesToBytes(r.Attributes())
-
 				_, err := db.ExecContext(ctx, insertSQL,
-					toISO8601(timestamp),
-					traceIDToHexOrEmptyString(r.TraceID()),
-					spanIDToHexOrEmptyString(r.SpanID()),
-					uint32(r.Flags()),
+					timestamp.AsTime(),
+					r.TraceID().String(),
+					r.SpanID().String(),
+					uint8(r.Flags()),
 					r.SeverityText(),
-					int32(r.SeverityNumber()),
+					uint8(r.SeverityNumber()),
 					serviceName,
 					r.Body().AsString(),
 					resURL,
-					resAttr,
+					resAttrBytes,
 					scopeURL,
 					scopeName,
 					scopeVersion,
-					scopeAttr,
-					logAttr,
+					scopeAttrBytes,
+					logAttrBytes,
 				)
 				if err != nil {
 					return err
@@ -245,30 +219,4 @@ func InsertLogsData(ctx context.Context, db *sql.DB, insertSQL string, ld plog.L
 	}
 
 	return nil
-}
-
-func SimpleLogs(count int) plog.Logs {
-	logs := plog.NewLogs()
-	rl := logs.ResourceLogs().AppendEmpty()
-	rl.SetSchemaUrl("https://opentelemetry.io/schemas/1.4.0")
-	rl.Resource().Attributes().PutStr("service.name", "test-service2")
-	sl := rl.ScopeLogs().AppendEmpty()
-	sl.SetSchemaUrl("https://opentelemetry.io/schemas/1.7.0")
-	sl.Scope().SetName("duckdb")
-	sl.Scope().SetVersion("1.0.0")
-	sl.Scope().Attributes().PutStr("lib", "duckdb")
-	timestamp := time.Now()
-	for i := range count {
-		r := sl.LogRecords().AppendEmpty()
-		r.SetTimestamp(pcommon.NewTimestampFromTime(timestamp))
-		r.SetObservedTimestamp(pcommon.NewTimestampFromTime(timestamp))
-		r.SetSeverityNumber(plog.SeverityNumberError2)
-		r.SetSeverityText("error")
-		r.Body().SetStr("error message")
-		r.Attributes().PutStr(string(semconv.ServiceNamespaceKey), "default")
-		r.SetFlags(plog.DefaultLogRecordFlags)
-		r.SetTraceID([16]byte{1, 2, 3, byte(i)})
-		r.SetSpanID([8]byte{1, 2, 3, byte(i)})
-	}
-	return logs
 }

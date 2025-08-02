@@ -21,6 +21,7 @@ export type LogRecord = {
 };
 
 export interface TraceRecord {
+	timestamp: string;
 	traceId: string;
 	spanId: string;
 	parentSpanId: string;
@@ -35,8 +36,13 @@ export interface TraceRecord {
 	duration: number;
 	statusCode: string;
 	statusMessage: string;
-	eventsAttributes: { [key: string]: unknown };
-	linksAttributes: { [key: string]: unknown };
+	eventsTimestamps: number[];
+	eventsNames: string[];
+	eventsAttributes: { [key: string]: unknown }[];
+	linksTraceIds: string[];
+	linksSpanIds: string[];
+	linksTraceStates: string[];
+	linksAttributes: { [key: string]: unknown }[];
 }
 
 export const API_BASE = 'http://127.0.0.1:3000';
