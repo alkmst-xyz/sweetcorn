@@ -17,7 +17,7 @@ const (
 CREATE SEQUENCE IF NOT EXISTS otel_logs_id_seq;
 
 CREATE TABLE IF NOT EXISTS %s (
-	_id						BIGINT PRIMARY KEY DEFAULT nextval ('otel_logs_id_seq'),
+	id						BIGINT PRIMARY KEY DEFAULT nextval ('otel_logs_id_seq'),
 	timestamp				TIMESTAMP_NS,
 	timestamp_time			TIMESTAMP_S GENERATED ALWAYS AS (CAST(Timestamp AS TIMESTAMP)),
 	trace_id				VARCHAR,
