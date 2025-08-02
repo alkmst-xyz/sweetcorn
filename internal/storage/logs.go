@@ -7,9 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
-	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
 )
 
 const (
@@ -114,40 +112,6 @@ func CreateLogsTable(ctx context.Context, cfg *Config, db *sql.DB) error {
 		return fmt.Errorf("exec create logs table sql: %w", err)
 	}
 	return nil
-}
-
-func jsonBlob(m map[string]any) []byte {
-	if m == nil {
-		return []byte("{}")
-	}
-
-	b, _ := json.Marshal(m)
-	return b
-}
-
-// deprecated
-func insertLog(ctx context.Context, cfg *Config, db *sql.DB, logRecord LogRecord) error {
-	insertLogsSQL := RenderInsertLogsSQL(cfg)
-
-	_, err := db.ExecContext(ctx, insertLogsSQL,
-		logRecord.Timestamp,
-		logRecord.TraceId,
-		logRecord.SpanId,
-		logRecord.TraceFlags,
-		logRecord.SeverityText,
-		logRecord.SeverityNumber,
-		logRecord.ServiceName,
-		logRecord.Body,
-		logRecord.ResourceSchemaUrl,
-		jsonBlob(logRecord.ResourceAttributes),
-		logRecord.ScopeSchemaUrl,
-		logRecord.ScopeName,
-		logRecord.ScopeVersion,
-		jsonBlob(logRecord.ScopeAttributes),
-		jsonBlob(logRecord.LogAttributes),
-	)
-
-	return err
 }
 
 func QueryLogs(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]LogRecord, error) {
@@ -255,30 +219,4 @@ func InsertLogsData(ctx context.Context, db *sql.DB, insertSQL string, ld plog.L
 	}
 
 	return nil
-}
-
-func SimpleLogs(count int) plog.Logs {
-	logs := plog.NewLogs()
-	rl := logs.ResourceLogs().AppendEmpty()
-	rl.SetSchemaUrl("https://opentelemetry.io/schemas/1.4.0")
-	rl.Resource().Attributes().PutStr("service.name", "test-service2")
-	sl := rl.ScopeLogs().AppendEmpty()
-	sl.SetSchemaUrl("https://opentelemetry.io/schemas/1.7.0")
-	sl.Scope().SetName("duckdb")
-	sl.Scope().SetVersion("1.0.0")
-	sl.Scope().Attributes().PutStr("lib", "duckdb")
-	timestamp := time.Now()
-	for i := range count {
-		r := sl.LogRecords().AppendEmpty()
-		r.SetTimestamp(pcommon.NewTimestampFromTime(timestamp))
-		r.SetObservedTimestamp(pcommon.NewTimestampFromTime(timestamp))
-		r.SetSeverityNumber(plog.SeverityNumberError2)
-		r.SetSeverityText("error")
-		r.Body().SetStr("error message")
-		r.Attributes().PutStr(string(semconv.ServiceNamespaceKey), "default")
-		r.SetFlags(plog.DefaultLogRecordFlags)
-		r.SetTraceID([16]byte{1, 2, 3, byte(i)})
-		r.SetSpanID([8]byte{1, 2, 3, byte(i)})
-	}
-	return logs
 }
