@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"io/fs"
 	"net/http"
 	"strings"
 )
@@ -18,11 +19,11 @@ import (
 //-----------------------------------------------------------------------------
 
 // Note: The file server is explicitly configured to respond with the root index.
-func newSPAFileServer(webAssetsDirPath string) http.Handler {
-	webAssetsDir := http.Dir(webAssetsDirPath)
+func newSPAFileServer(webAssets fs.FS) http.Handler {
+	fs := http.FS(webAssets)
 
-	webFileServer := http.FileServer(webAssetsDir)
-	webServeIndex := serveFileContents("index.html", webAssetsDir)
+	webFileServer := http.FileServer(fs)
+	webServeIndex := serveFileContents("index.html", fs)
 
 	return intercept404(webFileServer, webServeIndex)
 }
