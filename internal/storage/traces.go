@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS %s (
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
 	queryTracesSQLTemplate = `SELECT
-	timestamp_time,
+	timestamp,
 	trace_id,
 	span_id,
 	parent_span_id,
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS %s (
 FROM
 	%s
 ORDER BY
-	timestamp_time DESC
+	timestamp DESC
 LIMIT
 	100;
 `

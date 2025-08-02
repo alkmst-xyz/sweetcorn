@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS %s (
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
 	queryLogsSQLTemplate = `SELECT
-	timestamp_time,
+	timestamp,
 	trace_id,
 	span_id,
 	trace_flags,
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS %s (
 FROM
 	%s
 ORDER BY
-	timestamp_time DESC
+	timestamp DESC
 LIMIT
 	100;
 `
@@ -92,7 +92,7 @@ func RenderQueryLogsSQL(cfg *Config) string {
 }
 
 type LogRecord struct {
-	TimestampTime      time.Time      `json:"timestamp"`
+	Timestamp          time.Time      `json:"timestamp"`
 	TraceId            string         `json:"traceId"`
 	SpanId             string         `json:"spanId"`
 	TraceFlags         uint8          `json:"traceFlags"`
@@ -136,7 +136,7 @@ func insertLog(ctx context.Context, cfg *Config, db *sql.DB, logRecord LogRecord
 	insertLogsSQL := RenderInsertLogsSQL(cfg)
 
 	_, err := db.ExecContext(ctx, insertLogsSQL,
-		logRecord.TimestampTime,
+		logRecord.Timestamp,
 		logRecord.TraceId,
 		logRecord.SpanId,
 		logRecord.TraceFlags,
@@ -169,7 +169,7 @@ func QueryLogs(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]LogRecor
 		var result LogRecord
 
 		err := rows.Scan(
-			&result.TimestampTime,
+			&result.Timestamp,
 			&result.TraceId,
 			&result.SpanId,
 			&result.TraceFlags,

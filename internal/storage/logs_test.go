@@ -32,7 +32,7 @@ func withTestDB(t *testing.T, tableName string, fn func(ctx context.Context, cfg
 
 func sampleLog() LogRecord {
 	return LogRecord{
-		TimestampTime:     time.Now(),
+		Timestamp:         time.Now(),
 		TraceId:           "trace",
 		SpanId:            "span",
 		TraceFlags:        1,
