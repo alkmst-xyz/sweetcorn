@@ -1,121 +1,15 @@
 <script lang="ts">
-	import type { LogRecord } from '$lib/api';
-	import type { PageProps } from './$types';
-	import type { TableOptions } from '@tanstack/svelte-table';
 	import {
-		createSvelteTable,
-		flexRender,
-		getCoreRowModel,
-		type ColumnDef
-	} from '@tanstack/svelte-table';
-	import { writable } from 'svelte/store';
+		Datatable,
+		TableHandler,
+		ThFilter,
+		ThSort
+	} from '@vincjo/datatables';
+	import type { PageProps } from './$types';
 
-	// logs data
 	let { data }: PageProps = $props();
 
-	// // New in V9! Tell the table which features and row models we want to use.
-	// // In this case, this will be a basic table with no additional features.
-	// const _features = tableFeatures({});
-
-	// Define the columns for your table. This uses the new `ColumnDef` type to
-	// define columns. Alternatively, check out the
-	// createTableHelper/createColumnHelper util for an even more type-safe way
-	// to define columns.
-	//
-	// V9:
-	// const defaultColumns: ColumnDef<typeof _features, Person>[] = [
-	//
-	// V8:
-	const defaultColumns: ColumnDef<LogRecord>[] = [
-		{
-			accessorKey: 'timestamp',
-			header: () => 'Timestamp'
-		},
-		{
-			accessorKey: 'traceId',
-			header: () => 'Trace Id'
-		},
-		{
-			accessorKey: 'spanId',
-			header: () => 'Span Id'
-		},
-		{
-			accessorKey: 'traceFlags',
-			header: () => 'Trace Flags'
-		},
-		{
-			accessorKey: 'severityText',
-			header: () => 'Severity Text'
-		},
-		{
-			accessorKey: 'severityNumber',
-			header: () => 'Severity Number'
-		},
-		{
-			accessorKey: 'serviceName',
-			header: () => 'Service Name'
-		},
-		{
-			accessorKey: 'body',
-			header: () => 'Body'
-		},
-		{
-			accessorKey: 'resourceSchemaUrl',
-			header: () => 'Resource Schema URL'
-		},
-		{
-			accessorKey: 'resourceAttributes',
-			cell: (info) => JSON.stringify(info.getValue()),
-			header: () => 'Resource Attributes'
-		},
-		{
-			accessorKey: 'scopeSchemaUrl',
-			header: () => 'Scope Schema URL'
-		},
-		{
-			accessorKey: 'scopeName',
-			header: () => 'Scope Name'
-		},
-		{
-			accessorKey: 'scopeVersion',
-			header: () => 'Scope Version'
-		},
-		{
-			accessorKey: 'scopeAttributes',
-			cell: (info) => JSON.stringify(info.getValue()),
-			header: () => 'Scope Attributes'
-		},
-		{
-			accessorKey: 'logAttributes',
-			cell: (info) => JSON.stringify(info.getValue()),
-			header: () => 'Log Attributes'
-		}
-	];
-
-	// V8:
-	const options = writable<TableOptions<LogRecord>>({
-		data: data.logs,
-		columns: defaultColumns,
-		getCoreRowModel: getCoreRowModel()
-	});
-
-	// Create the table instance with required _features, columns, and data
-	//
-	// V9:
-	// const table = createTable({
-	// 	// 5a. New required option in V9. Tell the table which features you are
-	// 	//     importing and using (better tree-shaking).
-	// 	// _features,
-	// 	// 5b. `Core` row model is now included by default, but you can still
-	// 	//     override it here.
-	// 	_rowModels: {},
-	// 	defaultColumns,
-	//     defaultData
-	// 	// ...add additional table options here
-	// });
-	//
-	// V8:
-	const table = createSvelteTable(options);
+	const table = new TableHandler(data.logs, { rowsPerPage: 10 });
 </script>
 
 <svelte:head>
@@ -126,47 +20,73 @@
 <section>
 	<h1 class="mb-4 font-semibold">Logs</h1>
 
-	<div class="mb-4 text-sm">
-		Showing results: {data.logs.length}
-	</div>
-
 	<div class="mb-4 overflow-auto border">
-		<table>
-			<thead class="border-b bg-violet-400">
-				{#each $table.getHeaderGroups() as headerGroup}
+		<Datatable basic {table}>
+			<table>
+				<thead>
 					<tr>
-						{#each headerGroup.headers as header}
-							<th class="px-4">
-								{#if !header.isPlaceholder}
-									<svelte:component
-										this={flexRender(
-											header.column.columnDef.header,
-											header.getContext()
-										)}
-									/>
-								{/if}
-							</th>
-						{/each}
+						<ThSort {table} field="timestamp">Timestamp</ThSort>
+						<ThSort {table} field="traceId">Trace ID</ThSort>
+						<ThSort {table} field="spanId">Span ID</ThSort>
+						<ThSort {table} field="traceFlags">Trace Flags</ThSort>
+						<ThSort {table} field="severityText">Severity Text</ThSort>
+						<ThSort {table} field="severityNumber">Severity Number</ThSort>
+						<ThSort {table} field="serviceName">Service Name</ThSort>
+						<ThSort {table} field="body">Body</ThSort>
+						<ThSort {table} field="resourceSchemaUrl">
+							Resource Schema URL
+						</ThSort>
+						<ThSort {table} field="resourceAttributes">
+							Resource Attributes
+						</ThSort>
+						<ThSort {table} field="scopeSchemaUrl">Scope Schema URL</ThSort>
+						<ThSort {table} field="scopeName">Scope Name</ThSort>
+						<ThSort {table} field="scopeVersion">Scope Version</ThSort>
+						<ThSort {table} field="scopeAttributes">Scope Attributes</ThSort>
+						<ThSort {table} field="logAttributes">Log Attributes</ThSort>
 					</tr>
-				{/each}
-			</thead>
-
-			<tbody class="text-sm">
-				{#each $table.getRowModel().rows as row}
-					<tr class=" bg-violet-300 even:bg-violet-50">
-						{#each row.getVisibleCells() as cell}
-							<td class="px-4">
-								<svelte:component
-									this={flexRender(
-										cell.column.columnDef.cell,
-										cell.getContext()
-									)}
-								/>
+					<tr>
+						<ThFilter {table} field="timestamp" />
+						<ThFilter {table} field="traceId" />
+						<ThFilter {table} field="spanId" />
+						<ThFilter {table} field="traceFlags" />
+						<ThFilter {table} field="severityText" />
+						<ThFilter {table} field="severityNumber" />
+						<ThFilter {table} field="serviceName" />
+						<ThFilter {table} field="body" />
+						<ThFilter {table} field="resourceSchemaUrl" />
+						<ThFilter {table} field="resourceAttributes" />
+						<ThFilter {table} field="scopeSchemaUrl" />
+						<ThFilter {table} field="scopeName" />
+						<ThFilter {table} field="scopeVersion" />
+						<ThFilter {table} field="scopeAttributes" />
+						<ThFilter {table} field="logAttributes" />
+					</tr>
+				</thead>
+				<tbody>
+					{#each table.rows as row}
+						<tr>
+							<td>{row.timestamp}</td>
+							<td>{row.traceId}</td>
+							<td>{row.spanId}</td>
+							<td>{row.traceFlags}</td>
+							<td>{row.severityText}</td>
+							<td>{row.severityNumber}</td>
+							<td>{row.serviceName}</td>
+							<td>{row.body}</td>
+							<td>{row.resourceSchemaUrl}</td>
+							<td>
+								{JSON.stringify(row.resourceAttributes)}
 							</td>
-						{/each}
-					</tr>
-				{/each}
-			</tbody>
-		</table>
+							<td>{row.scopeSchemaUrl}</td>
+							<td>{row.scopeName}</td>
+							<td>{row.scopeVersion}</td>
+							<td>{JSON.stringify(row.scopeAttributes)}</td>
+							<td>{JSON.stringify(row.logAttributes)}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</Datatable>
 	</div>
 </section>
