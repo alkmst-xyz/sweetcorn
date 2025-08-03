@@ -26,6 +26,6 @@ export interface TraceRecord {
 }
 
 export async function getTraces() {
-	const res = await fetch(`${API_BASE}/api/v1/traces`);
+	const res = await fetch(`${API_BASE}/v1/traces`);
 	return { traces: (await res.json()) as Array<TraceRecord> };
 }
