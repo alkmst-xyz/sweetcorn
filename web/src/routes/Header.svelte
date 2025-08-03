@@ -7,17 +7,17 @@
 			title: 'Home'
 		},
 		{
-			path: '/logs',
+			path: '/#/logs',
 			title: 'Logs',
 			exact: false
 		},
 		{
-			path: '/traces',
+			path: '/#/traces',
 			title: 'Traces',
 			exact: false
 		},
 		{
-			path: '/about',
+			path: '/#/about',
 			title: 'About'
 		}
 	];

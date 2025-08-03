@@ -10,6 +10,7 @@ import (
 	"github.com/rs/cors"
 
 	"github.com/alkmst-xyz/sweetcorn/internal/storage"
+	"github.com/alkmst-xyz/sweetcorn/web"
 )
 
 const webDefaultContentType = "application/json"
@@ -64,8 +65,12 @@ func StartWebApp(ctx context.Context, db *sql.DB, queryLogsSQL string, queryTrac
 	mux := http.NewServeMux()
 
 	// Web UI
-	webAssetsDirPath := "./web/build"
-	mux.Handle("/", newSPAFileServer(webAssetsDirPath))
+	webAssets, webAssetsErr := web.AssetsFS()
+	if webAssetsErr != nil {
+		return webAssetsErr
+	}
+
+	mux.Handle("/", http.FileServer(http.FS(webAssets)))
 
 	// API routes
 	mux.HandleFunc("GET /api/v1/healthz", s.getHealthzHandler)
