@@ -5,9 +5,12 @@ import (
 	"io/fs"
 )
 
+// Embed files from `build/`, excluding files starting with '.' or '_'.
+//
 //go:embed all:build
 var assets embed.FS
 
-func Assets() (fs.FS, error) {
+// FS contains the web UI assets.
+func AssetsFS() (fs.FS, error) {
 	return fs.Sub(assets, "build")
 }

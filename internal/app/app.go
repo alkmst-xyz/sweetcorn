@@ -65,12 +65,12 @@ func StartWebApp(ctx context.Context, db *sql.DB, queryLogsSQL string, queryTrac
 	mux := http.NewServeMux()
 
 	// Web UI
-	webAssets, webAssetsErr := web.Assets()
+	webAssets, webAssetsErr := web.AssetsFS()
 	if webAssetsErr != nil {
 		return webAssetsErr
 	}
 
-	mux.Handle("/", newSPAFileServer(webAssets))
+	mux.Handle("/", http.FileServer(http.FS(webAssets)))
 
 	// API routes
 	mux.HandleFunc("GET /api/v1/healthz", s.getHealthzHandler)
