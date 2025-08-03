@@ -110,7 +110,7 @@ mod-verify: ## Verify module dependencies
 ###############################################################################
 
 .PHONY: ci
-ci: | deps vet mod-verify test build ## Run CI pipeline ('|' operator imposes ordering)
+ci: | install-ui-deps build-ui deps vet mod-verify test build ## Run CI pipeline ('|' operator imposes ordering)
 	@echo "[INFO] CI pipeline completed"
 
 ###############################################################################
