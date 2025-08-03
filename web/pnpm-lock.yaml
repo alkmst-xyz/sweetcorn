@@ -4,9 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  '@tanstack/svelte-table': npm:tanstack-table-8-svelte-5@^0.1
-
 importers:
 
   .:
@@ -41,9 +38,6 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.0.0
         version: 4.1.11(vite@6.3.5(jiti@2.4.2)(lightningcss@1.30.1))
-      '@tanstack/svelte-table':
-        specifier: npm:tanstack-table-8-svelte-5@^0.1
-        version: tanstack-table-8-svelte-5@0.1.2(svelte@5.35.2)
       '@vincjo/datatables':
         specifier: ^2.6.2
         version: 2.6.2(svelte@5.35.2)
@@ -614,10 +608,6 @@ packages:
     resolution: {integrity: sha512-RHYhrR3hku0MJFRV+fN2gNbDNEh3dwKvY8XJvTxCSXeMOsCRSr+uKvDWQcbizrHgjML6ZmTE5OwMrl5wKcujCw==}
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7
-
-  '@tanstack/table-core@8.21.3':
-    resolution: {integrity: sha512-ldZXEhOBb8Is7xLs01fR3YEc3DERiz5silj8tnGkFZytt1abEvl/GhUmCE0PMLaMPTa3Jk4HbKmRlHmu+gCftg==}
-    engines: {node: '>=12'}
 
   '@testing-library/dom@10.4.0':
     resolution: {integrity: sha512-pemlzrSESWbdAloYml3bAJMEfNh1Z7EduzqPKprCH5S341frlpYnUEW0H72dLxa6IsYr+mPno20GiSm+h9dEdQ==}
@@ -1536,11 +1526,6 @@ packages:
   tailwindcss@4.1.11:
     resolution: {integrity: sha512-2E9TBm6MDD/xKYe+dvJZAmg3yxIEDNRc0jwlNyDg/4Fil2QcSLjFKGVff0lAf1jjeaArlG/M75Ey/EYr/OJtBA==}
 
-  tanstack-table-8-svelte-5@0.1.2:
-    resolution: {integrity: sha512-wMRu7Y709GpRrbPSN6uiYPCsNk5J/ZjvNuHGCbSUNNZEs1u4q09qnoTbY1EcwGAb3RkDEHEyrE9ArJNT4w0HOg==}
-    peerDependencies:
-      svelte: ^5.0.0
-
   tapable@2.2.2:
     resolution: {integrity: sha512-Re10+NauLTMCudc7T5WLFLAwDhQ0JWdrMK+9B2M8zR5hRExKmsRDCBA7/aV/pNJFltmBFO5BAMlQFi/vq3nKOg==}
     engines: {node: '>=6'}
@@ -2129,8 +2114,6 @@ snapshots:
       '@tailwindcss/oxide': 4.1.11
       tailwindcss: 4.1.11
       vite: 6.3.5(jiti@2.4.2)(lightningcss@1.30.1)
-
-  '@tanstack/table-core@8.21.3': {}
 
   '@testing-library/dom@10.4.0':
     dependencies:
@@ -2998,11 +2981,6 @@ snapshots:
       zimmerframe: 1.1.2
 
   tailwindcss@4.1.11: {}
-
-  tanstack-table-8-svelte-5@0.1.2(svelte@5.35.2):
-    dependencies:
-      '@tanstack/table-core': 8.21.3
-      svelte: 5.35.2
 
   tapable@2.2.2: {}
 
