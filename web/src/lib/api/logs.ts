@@ -1,3 +1,4 @@
+import type { FetchType } from './types';
 import { API_BASE } from './utils';
 
 export type LogRecord = {
@@ -18,7 +19,7 @@ export type LogRecord = {
 	logAttributes: { [key: string]: unknown };
 };
 
-export async function getLogs() {
+export async function getLogs(fetch: FetchType) {
 	const res = await fetch(`${API_BASE}/v1/logs`);
 	return { logs: (await res.json()) as Array<LogRecord> };
 }

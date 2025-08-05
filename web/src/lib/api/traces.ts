@@ -1,3 +1,4 @@
+import type { FetchType } from './types';
 import { API_BASE } from './utils';
 
 export interface TraceRecord {
@@ -25,7 +26,7 @@ export interface TraceRecord {
 	linksAttributes: { [key: string]: unknown }[];
 }
 
-export async function getTraces() {
+export async function getTraces(fetch: FetchType) {
 	const res = await fetch(`${API_BASE}/v1/traces`);
 	return { traces: (await res.json()) as Array<TraceRecord> };
 }
