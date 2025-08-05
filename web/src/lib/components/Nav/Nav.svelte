@@ -12,14 +12,12 @@
 			{#if item.exact === false}
 				<NavItem
 					{item}
-					ariaCurrent={page.url.pathname.startsWith(item.path)
-						? 'page'
-						: undefined}
+					ariaCurrent={page.url.hash.startsWith(item.path) ? 'page' : undefined}
 				/>
 			{:else}
 				<NavItem
 					{item}
-					ariaCurrent={page.url.pathname === item.path ? 'page' : undefined}
+					ariaCurrent={page.url.hash === item.path ? 'page' : undefined}
 				/>
 			{/if}
 		{/each}

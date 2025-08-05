@@ -1,124 +1,15 @@
 <script lang="ts">
-	import type { TraceRecord } from '$lib/api';
-	import type { PageProps } from './$types';
-	import type { TableOptions } from '@tanstack/svelte-table';
 	import {
-		createSvelteTable,
-		flexRender,
-		getCoreRowModel,
-		type ColumnDef
-	} from '@tanstack/svelte-table';
-	import { writable } from 'svelte/store';
+		Datatable,
+		TableHandler,
+		ThFilter,
+		ThSort
+	} from '@vincjo/datatables';
+	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
-	const defaultColumns: ColumnDef<TraceRecord>[] = [
-		{
-			accessorKey: 'timestamp',
-			header: () => 'Timestamp'
-		},
-		{
-			accessorKey: 'traceId',
-			header: () => 'Trace Id'
-		},
-		{
-			accessorKey: 'spanId',
-			header: () => 'Span Id'
-		},
-		{
-			accessorKey: 'parentSpanId',
-			header: () => 'Parent Span ID'
-		},
-		{
-			accessorKey: 'traceState',
-			header: () => 'Trace State'
-		},
-		{
-			accessorKey: 'spanName',
-			header: () => 'Span Name'
-		},
-		{
-			accessorKey: 'spanKind',
-			header: () => 'Span Kind'
-		},
-		{
-			accessorKey: 'serviceName',
-			header: () => 'Service Name'
-		},
-		{
-			accessorKey: 'resourceAttributes',
-			cell: (info) => JSON.stringify(info.getValue()),
-			header: () => 'Resource Attributes'
-		},
-		{
-			accessorKey: 'scopeName',
-			header: () => 'Scope Name'
-		},
-		{
-			accessorKey: 'scopeVersion',
-			header: () => 'Scope Version'
-		},
-		{
-			accessorKey: 'spanAttributes',
-			cell: (info) => JSON.stringify(info.getValue()),
-			header: () => 'Span Attributes'
-		},
-		{
-			accessorKey: 'duration',
-			header: () => 'Duration'
-		},
-		{
-			accessorKey: 'statusCode',
-			header: () => 'Status Code'
-		},
-		{
-			accessorKey: 'statusMessage',
-			header: () => 'Status Message'
-		},
-		{
-			accessorKey: 'eventsTimestamps',
-			cell: (info) => JSON.stringify(info.getValue()),
-			header: () => 'Events Timestamps'
-		},
-		{
-			accessorKey: 'eventsNames',
-			cell: (info) => JSON.stringify(info.getValue()),
-			header: () => 'Events Names'
-		},
-		{
-			accessorKey: 'eventsAttributes',
-			cell: (info) => JSON.stringify(info.getValue()),
-			header: () => 'Events Attributes'
-		},
-		{
-			accessorKey: 'linksTraceIds',
-			cell: (info) => JSON.stringify(info.getValue()),
-			header: () => 'Links Trace IDs'
-		},
-		{
-			accessorKey: 'linksSpanIds',
-			cell: (info) => JSON.stringify(info.getValue()),
-			header: () => 'Links Span IDs'
-		},
-		{
-			accessorKey: 'linksTraceStates',
-			cell: (info) => JSON.stringify(info.getValue()),
-			header: () => 'Links Trace States'
-		},
-		{
-			accessorKey: 'linksAttributes',
-			cell: (info) => JSON.stringify(info.getValue()),
-			header: () => 'Links Attributes'
-		}
-	];
-
-	const options = writable<TableOptions<TraceRecord>>({
-		data: data.traces,
-		columns: defaultColumns,
-		getCoreRowModel: getCoreRowModel()
-	});
-
-	const table = createSvelteTable(options);
+	const table = new TableHandler(data.traces, { rowsPerPage: 10 });
 </script>
 
 <svelte:head>
@@ -129,47 +20,108 @@
 <section>
 	<h1 class="mb-4 font-semibold">Traces</h1>
 
-	<div class="mb-4 text-sm">
-		Showing results: {data.traces.length}
-	</div>
-
 	<div class="mb-4 overflow-auto border">
-		<table>
-			<thead class="border-b bg-violet-400">
-				{#each $table.getHeaderGroups() as headerGroup}
+		<Datatable basic {table}>
+			<table>
+				<thead>
 					<tr>
-						{#each headerGroup.headers as header}
-							<th class="px-4">
-								{#if !header.isPlaceholder}
-									<svelte:component
-										this={flexRender(
-											header.column.columnDef.header,
-											header.getContext()
-										)}
-									/>
-								{/if}
-							</th>
-						{/each}
+						<ThSort {table} field="timestamp">Timestamp</ThSort>
+						<ThSort {table} field="traceId">Trace ID</ThSort>
+						<ThSort {table} field="spanId">Span ID</ThSort>
+						<ThSort {table} field="parentSpanId">Parent Span ID</ThSort>
+						<ThSort {table} field="traceState">Trace State</ThSort>
+						<ThSort {table} field="spanName">Span Name</ThSort>
+						<ThSort {table} field="spanKind">Span Kind</ThSort>
+						<ThSort {table} field="serviceName">Service Name</ThSort>
+						<ThSort {table} field="resourceAttributes"
+							>Resource Attributes</ThSort
+						>
+						<ThSort {table} field="scopeName">Scope Name</ThSort>
+						<ThSort {table} field="scopeVersion">Scope Version</ThSort>
+						<ThSort {table} field="spanAttributes">Span Attributes</ThSort>
+						<ThSort {table} field="duration">Duration</ThSort>
+						<ThSort {table} field="statusCode">Status Code</ThSort>
+						<ThSort {table} field="statusMessage">Status Message</ThSort>
+						<ThSort {table} field="eventsTimestamps">Events Timestamps</ThSort>
+						<ThSort {table} field="eventsNames">Events Names</ThSort>
+						<ThSort {table} field="eventsAttributes">Events Attributes</ThSort>
+						<ThSort {table} field="linksTraceIds">Links Trace IDs</ThSort>
+						<ThSort {table} field="linksSpanIds">Links Span IDs</ThSort>
+						<ThSort {table} field="linksTraceStates">Links Trace States</ThSort>
+						<ThSort {table} field="linksAttributes">Links Attributes</ThSort>
 					</tr>
-				{/each}
-			</thead>
-
-			<tbody class="text-sm">
-				{#each $table.getRowModel().rows as row}
-					<tr class=" bg-violet-300 even:bg-violet-50">
-						{#each row.getVisibleCells() as cell}
-							<td class="px-4">
-								<svelte:component
-									this={flexRender(
-										cell.column.columnDef.cell,
-										cell.getContext()
-									)}
-								/>
+					<tr>
+						<ThFilter {table} field="timestamp" />
+						<ThFilter {table} field="traceId" />
+						<ThFilter {table} field="spanId" />
+						<ThFilter {table} field="parentSpanId" />
+						<ThFilter {table} field="traceState" />
+						<ThFilter {table} field="spanName" />
+						<ThFilter {table} field="spanKind" />
+						<ThFilter {table} field="serviceName" />
+						<ThFilter {table} field="resourceAttributes" />
+						<ThFilter {table} field="scopeName" />
+						<ThFilter {table} field="scopeVersion" />
+						<ThFilter {table} field="spanAttributes" />
+						<ThFilter {table} field="duration" />
+						<ThFilter {table} field="statusCode" />
+						<ThFilter {table} field="statusMessage" />
+						<ThFilter {table} field="eventsTimestamps" />
+						<ThFilter {table} field="eventsNames" />
+						<ThFilter {table} field="eventsAttributes" />
+						<ThFilter {table} field="linksTraceIds" />
+						<ThFilter {table} field="linksSpanIds" />
+						<ThFilter {table} field="linksTraceStates" />
+						<ThFilter {table} field="linksAttributes" />
+					</tr>
+				</thead>
+				<tbody>
+					{#each table.rows as row}
+						<tr>
+							<td>{row.timestamp}</td>
+							<td>{row.traceId}</td>
+							<td>{row.spanId}</td>
+							<td>{row.parentSpanId}</td>
+							<td>{row.traceState}</td>
+							<td>{row.spanName}</td>
+							<td>{row.spanKind}</td>
+							<td>{row.serviceName}</td>
+							<td>
+								{JSON.stringify(row.resourceAttributes)}
 							</td>
-						{/each}
-					</tr>
-				{/each}
-			</tbody>
-		</table>
+							<td>{row.scopeName}</td>
+							<td>{row.scopeVersion}</td>
+							<td>
+								{JSON.stringify(row.spanAttributes)}
+							</td>
+							<td>{row.duration}</td>
+							<td>{row.statusCode}</td>
+							<td>{row.statusMessage}</td>
+							<td>
+								{JSON.stringify(row.eventsTimestamps)}
+							</td>
+							<td>
+								{JSON.stringify(row.eventsNames)}
+							</td>
+							<td>
+								{JSON.stringify(row.eventsAttributes)}
+							</td>
+							<td>
+								{JSON.stringify(row.linksTraceIds)}
+							</td>
+							<td>
+								{JSON.stringify(row.linksSpanIds)}
+							</td>
+							<td>
+								{JSON.stringify(row.linksTraceStates)}
+							</td>
+							<td>
+								{JSON.stringify(row.linksAttributes)}
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</Datatable>
 	</div>
 </section>
