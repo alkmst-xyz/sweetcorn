@@ -20,6 +20,6 @@ export type LogRecord = {
 };
 
 export async function getLogs(fetch: FetchType) {
-	const res = await fetch(`${API_BASE}/v1/logs`);
-	return { logs: (await res.json()) as Array<LogRecord> };
+	const response = await fetch(`${API_BASE}/v1/logs`);
+	return (await response.json()) as Array<LogRecord>;
 }

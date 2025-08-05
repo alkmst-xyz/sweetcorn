@@ -7,6 +7,5 @@ export type StatusResponse = {
 
 export async function getHealthz(fetch: FetchType) {
 	const res = await fetch(`${API_BASE}/v1/healthz`);
-	const data = await res.json();
-	return data as StatusResponse;
+	return (await res.json()) as StatusResponse;
 }
