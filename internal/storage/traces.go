@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/marcboeker/go-duckdb/v2"
@@ -97,6 +98,22 @@ ORDER BY
 LIMIT
 	100;
 `
+
+	queryDistinctTraceServicesSQLTemplate = `
+SELECT DISTINCT
+    service_name
+FROM
+	%s
+LIMIT
+	100;`
+
+	queryDistinctTraceOperationsSQLTemplate = `
+SELECT DISTINCT
+    span_name
+FROM
+	%s
+LIMIT
+	100;`
 )
 
 type TraceRecord struct {
@@ -176,6 +193,14 @@ func RenderQueryTracesSQL(cfg *Config) string {
 	return fmt.Sprintf(queryTracesSQLTemplate, cfg.TracesTableName)
 }
 
+func RenderQueryDistinctTraceServicesSQL(cfg *Config) string {
+	return fmt.Sprintf(queryDistinctTraceServicesSQLTemplate, cfg.TracesTableName)
+}
+
+func RenderQueryDistinctTraceOperationsSQL(cfg *Config) string {
+	return fmt.Sprintf(queryDistinctTraceOperationsSQLTemplate, cfg.TracesTableName)
+}
+
 func InsertTracesData(ctx context.Context, db *sql.DB, insertSQL string, td ptrace.Traces) error {
 	rsSpans := td.ResourceSpans()
 
@@ -252,8 +277,8 @@ func InsertTracesData(ctx context.Context, db *sql.DB, insertSQL string, td ptra
 	return nil
 }
 
-func QueryTraces(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]TraceRecord, error) {
-	rows, err := db.QueryContext(ctx, queryLogsSQL)
+func QueryTraces(ctx context.Context, db *sql.DB, queryTracesSQL string) ([]TraceRecord, error) {
+	rows, err := db.QueryContext(ctx, queryTracesSQL)
 	if err != nil {
 		return nil, err
 	}
@@ -312,6 +337,54 @@ func QueryTraces(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]TraceR
 		result.LinksAttributes = linksAttributes.Get()
 
 		results = append(results, result)
+	}
+
+	return results, nil
+}
+
+func GetDistinctServices(ctx context.Context, db *sql.DB, query string) ([]string, error) {
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]string, 0)
+	for rows.Next() {
+		var result string
+		if err := rows.Scan(&result); err != nil {
+			log.Fatal(err)
+		}
+
+		results = append(results, result)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	return results, nil
+}
+
+func GetDistinctOperations(ctx context.Context, db *sql.DB, query string) ([]string, error) {
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]string, 0)
+	for rows.Next() {
+		var result string
+		if err := rows.Scan(&result); err != nil {
+			log.Fatal(err)
+		}
+
+		results = append(results, result)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
 	}
 
 	return results, nil
