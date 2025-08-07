@@ -20,6 +20,34 @@
 <section>
 	<h1 class="mb-4 font-semibold">Traces</h1>
 
+	<div>
+		<h2>Services</h2>
+		<p>Total: {data.services.length}</p>
+		<div>
+			<ul>
+				{#each data.services as item}
+					<li>
+						{item}
+					</li>
+				{/each}
+			</ul>
+		</div>
+	</div>
+
+	<div>
+		<h2>Operations</h2>
+		<p>Total: {data.operations.length}</p>
+		<div>
+			<ul>
+				{#each data.operations as item}
+					<li>
+						{item}
+					</li>
+				{/each}
+			</ul>
+		</div>
+	</div>
+
 	<div class="mb-4 overflow-auto border">
 		<Datatable basic {table}>
 			<table>
