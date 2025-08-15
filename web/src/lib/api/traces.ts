@@ -6,11 +6,11 @@ export async function getTraces(fetch: FetchType) {
 	return (await res.json()) as Array<TraceRecord>;
 }
 export async function getDistinctTraceServices(fetch: FetchType) {
-	const res = await fetch(`${API_BASE}/v1/traces/services`);
+	const res = await fetch(`${API_BASE}/v1/jaeger/api/services`);
 	return (await res.json()) as ServicesResponse;
 }
 
 export async function getDistinctTraceOperations(fetch: FetchType) {
-	const res = await fetch(`${API_BASE}/v1/traces/operations`);
+	const res = await fetch(`${API_BASE}/v1/jaeger/api/operations`);
 	return (await res.json()) as ServicesResponse;
 }

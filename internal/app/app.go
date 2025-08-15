@@ -143,9 +143,9 @@ func StartWebApp(ctx context.Context, db *sql.DB, addr string, queryLogsSQL stri
 	mux.HandleFunc("GET /api/v1/healthz", s.getHealthzHandler)
 	mux.HandleFunc("GET /api/v1/logs", s.getLogsHandler)
 	mux.HandleFunc("GET /api/v1/traces", s.getTracesHandler)
-	mux.HandleFunc("GET /api/v1/traces/services", s.getDistinctTraceServices)
-	mux.HandleFunc("GET /api/v1/traces/operations", s.getDistinctTraceOperations)
-	mux.HandleFunc("GET /api/v1/traces/traces", s.getTraces)
+	mux.HandleFunc("GET /api/v1/jaeger/api/services", s.getDistinctTraceServices)
+	mux.HandleFunc("GET /api/v1/jaeger/api/operations", s.getDistinctTraceOperations)
+	mux.HandleFunc("GET /api/v1/jaeger/api/traces", s.getTraces)
 
 	server := &http.Server{
 		Addr:    addr,
