@@ -141,6 +141,25 @@ GROUP BY
 	trace_id
 LIMIT
 	100;`
+
+	getTraceSQL = `
+SELECT
+	trace_id,
+	array_agg(
+		struct_pack(
+			"TraceID" := trace_id,
+			"SpanID" := span_id,
+			"OperationName" := span_name,
+			"StartTime" := epoch_us(timestamp),
+			"Duration" := duration // 1000
+		)
+	) as spans
+FROM
+	otel_traces
+WHERE
+	trace_id = ?
+GROUP BY
+	trace_id;`
 )
 
 type TraceRecord struct {
@@ -522,4 +541,26 @@ func GetTraces(ctx context.Context, db *sql.DB) ([]TraceResponse, error) {
 	}
 
 	return results, nil
+}
+
+func GetTrace(ctx context.Context, db *sql.DB, traceID string) (TraceResponse, error) {
+	row := db.QueryRowContext(ctx, getTraceSQL, traceID)
+
+	var result TraceResponse
+	var spans duckdb.Composite[[]Span]
+
+	err := row.Scan(
+		&result.TraceID,
+		&spans,
+	)
+	if err == sql.ErrNoRows {
+		return result, fmt.Errorf("no trace found with id: %s", traceID)
+	}
+	if err != nil {
+		return result, err
+	}
+
+	result.Spans = spans.Get()
+
+	return result, nil
 }

@@ -119,6 +119,22 @@ func (s WebService) getTraces(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+func (s WebService) getTrace(w http.ResponseWriter, r *http.Request) {
+	traceID := r.PathValue("trace_id")
+	response, err := storage.GetTrace(s.ctx, s.db, traceID)
+
+	// TODO: use proper error responses
+	if err != nil {
+		w.Header().Set("Content-Type", webDefaultContentType)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", webDefaultContentType)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
 func StartWebApp(ctx context.Context, db *sql.DB, addr string, queryLogsSQL string, queryTracesSQL string, queryDistinctTraceServicesSQL string, queryDistinctTraceOperationsSQL string) error {
 	s := &WebService{
 		ctx:                             ctx,
@@ -146,6 +162,7 @@ func StartWebApp(ctx context.Context, db *sql.DB, addr string, queryLogsSQL stri
 	mux.HandleFunc("GET /api/v1/jaeger/api/services", s.getDistinctTraceServices)
 	mux.HandleFunc("GET /api/v1/jaeger/api/operations", s.getDistinctTraceOperations)
 	mux.HandleFunc("GET /api/v1/jaeger/api/traces", s.getTraces)
+	mux.HandleFunc("GET /api/v1/jaeger/api/traces/{trace_id}", s.getTrace)
 
 	server := &http.Server{
 		Addr:    addr,
