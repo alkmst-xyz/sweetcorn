@@ -145,9 +145,9 @@ LIMIT
 
 type TraceRecord struct {
 	TimestampTime      int64            `json:"timestamp"`
-	TraceId            string           `json:"traceId"`
-	SpanId             string           `json:"spanId"`
-	ParentSpanId       string           `json:"parentSpanId"`
+	TraceID            string           `json:"traceID"`
+	SpanID             string           `json:"spanID"`
+	ParentSpanID       string           `json:"parentSpanID"`
 	TraceState         string           `json:"traceState"`
 	SpanName           string           `json:"spanName"`
 	SpanKind           string           `json:"spanKind"`
@@ -162,8 +162,8 @@ type TraceRecord struct {
 	EventsTimestamps   []time.Time      `json:"eventsTimestamps"`
 	EventsNames        []string         `json:"eventsNames"`
 	EventsAttributes   []map[string]any `json:"eventsAttributes"`
-	LinksTraceIds      []string         `json:"linksTraceIds"`
-	LinksSpanIds       []string         `json:"linksSpanIds"`
+	LinksTraceIDs      []string         `json:"linksTraceIDs"`
+	LinksSpanIDs       []string         `json:"linksSpanIDs"`
 	LinksTraceStates   []string         `json:"linksTraceStates"`
 	LinksAttributes    []map[string]any `json:"linksAttributes"`
 }
@@ -395,9 +395,9 @@ func QueryTraces(ctx context.Context, db *sql.DB, queryTracesSQL string) ([]Trac
 
 		err := rows.Scan(
 			&timestamp,
-			&result.TraceId,
-			&result.SpanId,
-			&result.ParentSpanId,
+			&result.TraceID,
+			&result.SpanID,
+			&result.ParentSpanID,
 			&result.TraceState,
 			&result.SpanName,
 			&result.SpanKind,
@@ -426,8 +426,8 @@ func QueryTraces(ctx context.Context, db *sql.DB, queryTracesSQL string) ([]Trac
 		result.EventsNames = eventsNames.Get()
 		result.EventsAttributes = eventsAttributes.Get()
 
-		result.LinksTraceIds = linksTraceIds.Get()
-		result.LinksSpanIds = linksSpanIds.Get()
+		result.LinksTraceIDs = linksTraceIds.Get()
+		result.LinksSpanIDs = linksSpanIds.Get()
 		result.LinksTraceStates = linksTraceStates.Get()
 		result.LinksAttributes = linksAttributes.Get()
 

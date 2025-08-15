@@ -2,9 +2,9 @@ export type FetchType = typeof fetch;
 
 export type TraceRecord = {
 	timestamp: number;
-	traceId: string;
-	spanId: string;
-	parentSpanId: string;
+	traceID: string;
+	spanID: string;
+	parentSpanID: string;
 	traceState: string;
 	spanName: string;
 	spanKind: string;
@@ -19,8 +19,8 @@ export type TraceRecord = {
 	eventsTimestamps: number[];
 	eventsNames: string[];
 	eventsAttributes: { [key: string]: unknown }[];
-	linksTraceIds: string[];
-	linksSpanIds: string[];
+	linksTraceIDs: string[];
+	linksSpanIDs: string[];
 	linksTraceStates: string[];
 	linksAttributes: { [key: string]: unknown }[];
 };

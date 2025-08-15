@@ -107,9 +107,9 @@
 					{#each table.rows as row}
 						<tr>
 							<td>{row.timestamp}</td>
-							<td>{row.traceId}</td>
-							<td>{row.spanId}</td>
-							<td>{row.parentSpanId}</td>
+							<td>{row.traceID}</td>
+							<td>{row.spanID}</td>
+							<td>{row.parentSpanID}</td>
 							<td>{row.traceState}</td>
 							<td>{row.spanName}</td>
 							<td>{row.spanKind}</td>
@@ -135,10 +135,10 @@
 								{JSON.stringify(row.eventsAttributes)}
 							</td>
 							<td>
-								{JSON.stringify(row.linksTraceIds)}
+								{JSON.stringify(row.linksTraceIDs)}
 							</td>
 							<td>
-								{JSON.stringify(row.linksSpanIds)}
+								{JSON.stringify(row.linksSpanIDs)}
 							</td>
 							<td>
 								{JSON.stringify(row.linksTraceStates)}
