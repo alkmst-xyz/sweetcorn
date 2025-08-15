@@ -54,7 +54,7 @@ func main() {
 	// start servers
 	const httpAddr = ":4318"
 	const grpcAddr = ":4317"
-	const appAddr = ":3000"
+	const appAddr = ":13579"
 
 	g, ctx := errgroup.WithContext(ctx)
 
