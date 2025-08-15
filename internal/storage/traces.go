@@ -115,6 +115,16 @@ FROM
 LIMIT
 	100;`
 
+	queryServiceOperationsSQL = `
+SELECT DISTINCT
+    span_name
+FROM
+	otel_traces
+WHERE
+	service_name = ?
+LIMIT
+	100;`
+
 	// Note:
 	// When using `struct_pack`, match it to the name of the golang struct field.
 	// This is useful when we deserialize during query. See `GetTraces()`.
@@ -488,6 +498,30 @@ func GetDistinctServices(ctx context.Context, db *sql.DB, query string) ([]strin
 
 func GetDistinctOperations(ctx context.Context, db *sql.DB, query string) ([]string, error) {
 	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]string, 0)
+	for rows.Next() {
+		var result string
+		if err := rows.Scan(&result); err != nil {
+			log.Fatal(err)
+		}
+
+		results = append(results, result)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	return results, nil
+}
+
+func GetServiceOperations(ctx context.Context, db *sql.DB, serviceName string) ([]string, error) {
+	rows, err := db.QueryContext(ctx, queryServiceOperationsSQL, serviceName)
 	if err != nil {
 		return nil, err
 	}

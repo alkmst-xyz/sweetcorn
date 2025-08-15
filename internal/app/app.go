@@ -98,6 +98,29 @@ func (s WebService) getDistinctTraceOperations(w http.ResponseWriter, r *http.Re
 	json.NewEncoder(w).Encode(response)
 }
 
+func (s WebService) getServiceTraceOperations(w http.ResponseWriter, r *http.Request) {
+	serviceName := r.PathValue("service_name")
+
+	data, err := storage.GetServiceOperations(s.ctx, s.db, serviceName)
+	if err != nil {
+		w.Header().Set("Content-Type", webDefaultContentType)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	response := &storage.ServicesResponse{
+		Data:   data,
+		Errors: nil,
+		Limit:  -1,
+		Offset: -1,
+		Total:  len(data),
+	}
+
+	w.Header().Set("Content-Type", webDefaultContentType)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
 func (s WebService) getTraces(w http.ResponseWriter, r *http.Request) {
 	data, err := storage.GetTraces(s.ctx, s.db)
 	if err != nil {
@@ -160,6 +183,7 @@ func StartWebApp(ctx context.Context, db *sql.DB, addr string, queryLogsSQL stri
 	mux.HandleFunc("GET /api/v1/logs", s.getLogsHandler)
 	mux.HandleFunc("GET /api/v1/traces", s.getTracesHandler)
 	mux.HandleFunc("GET /api/v1/jaeger/api/services", s.getDistinctTraceServices)
+	mux.HandleFunc("GET /api/v1/jaeger/api/services/{service_name}/operations", s.getServiceTraceOperations)
 	mux.HandleFunc("GET /api/v1/jaeger/api/operations", s.getDistinctTraceOperations)
 	mux.HandleFunc("GET /api/v1/jaeger/api/traces", s.getTraces)
 	mux.HandleFunc("GET /api/v1/jaeger/api/traces/{trace_id}", s.getTrace)
