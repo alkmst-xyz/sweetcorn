@@ -117,7 +117,7 @@ LIMIT
 )
 
 type TraceRecord struct {
-	TimestampTime      time.Time        `json:"timestamp"`
+	TimestampTime      int64            `json:"timestamp"`
 	TraceId            string           `json:"traceId"`
 	SpanId             string           `json:"spanId"`
 	ParentSpanId       string           `json:"parentSpanId"`
@@ -306,10 +306,11 @@ func QueryTraces(ctx context.Context, db *sql.DB, queryTracesSQL string) ([]Trac
 		var linksTraceStates duckdb.Composite[[]string]
 		var linksAttributes duckdb.Composite[[]map[string]any]
 
+		var timestamp time.Time
 		var duration uint64
 
 		err := rows.Scan(
-			&result.TimestampTime,
+			&timestamp,
 			&result.TraceId,
 			&result.SpanId,
 			&result.ParentSpanId,
@@ -348,6 +349,9 @@ func QueryTraces(ctx context.Context, db *sql.DB, queryTracesSQL string) ([]Trac
 
 		// convert nanoseconds to milliseconds
 		result.Duration = duration / 1000
+
+		// convert timestamp to unix epoch in microseconds
+		result.TimestampTime = timestamp.UnixMicro()
 
 		results = append(results, result)
 	}

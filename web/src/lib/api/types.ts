@@ -1,7 +1,7 @@
 export type FetchType = typeof fetch;
 
 export type TraceRecord = {
-	timestamp: string;
+	timestamp: number;
 	traceId: string;
 	spanId: string;
 	parentSpanId: string;
