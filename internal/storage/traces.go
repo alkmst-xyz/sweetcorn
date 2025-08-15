@@ -141,6 +141,14 @@ type TraceRecord struct {
 	LinksAttributes    []map[string]any `json:"linksAttributes"`
 }
 
+type ServicesResponse struct {
+	Data   []string `json:"data"`
+	Errors any      `json:"errors"`
+	Limit  int      `json:"limit"`
+	Offset int      `json:"offset"`
+	Total  int      `json:"total"`
+}
+
 func convertEvents(events ptrace.SpanEventSlice) (times []time.Time, names, attrs []string, err error) {
 	for i := 0; i < events.Len(); i++ {
 		event := events.At(i)

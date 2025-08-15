@@ -57,29 +57,45 @@ func (s WebService) getTracesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s WebService) getDistinctTraceServices(w http.ResponseWriter, r *http.Request) {
-	res, err := storage.GetDistinctServices(s.ctx, s.db, s.queryDistinctTraceServicesSQL)
+	data, err := storage.GetDistinctServices(s.ctx, s.db, s.queryDistinctTraceServicesSQL)
 	if err != nil {
 		w.Header().Set("Content-Type", webDefaultContentType)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
+	response := &storage.ServicesResponse{
+		Data:   data,
+		Errors: nil,
+		Limit:  -1,
+		Offset: -1,
+		Total:  len(data),
+	}
+
 	w.Header().Set("Content-Type", webDefaultContentType)
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(res)
+	json.NewEncoder(w).Encode(response)
 }
 
 func (s WebService) getDistinctTraceOperations(w http.ResponseWriter, r *http.Request) {
-	res, err := storage.GetDistinctOperations(s.ctx, s.db, s.queryDistinctTraceOperationsSQL)
+	data, err := storage.GetDistinctOperations(s.ctx, s.db, s.queryDistinctTraceOperationsSQL)
 	if err != nil {
 		w.Header().Set("Content-Type", webDefaultContentType)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
+	response := &storage.ServicesResponse{
+		Data:   data,
+		Errors: nil,
+		Limit:  -1,
+		Offset: -1,
+		Total:  len(data),
+	}
+
 	w.Header().Set("Content-Type", webDefaultContentType)
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(res)
+	json.NewEncoder(w).Encode(response)
 }
 
 func StartWebApp(ctx context.Context, db *sql.DB, addr string, queryLogsSQL string, queryTracesSQL string, queryDistinctTraceServicesSQL string, queryDistinctTraceOperationsSQL string) error {
