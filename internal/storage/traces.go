@@ -114,6 +114,33 @@ FROM
 	%s
 LIMIT
 	100;`
+
+	// Note:
+	// When using `struct_pack`, match it to the name of the golang struct field.
+	// This is useful when we deserialize during query. See `GetTraces()`.
+	// TODO:
+	// - AND CAST(timestamp AS TIMESTAMP) >= NOW() - INTERVAL '1 hour'
+	// - AND (span_attributes->>'$."peer.service"') = 'telemetrygen-server'
+	getTracesSQL = `
+SELECT
+	trace_id,
+	array_agg(
+		struct_pack(
+			"TraceID" := trace_id,
+			"SpanID" := span_id,
+			"OperationName" := span_name,
+			"StartTime" := epoch_us(timestamp),
+			"Duration" := duration // 1000
+		)
+	) as spans
+FROM
+	otel_traces
+WHERE
+    service_name = 'telemetrygen'
+GROUP BY
+	trace_id
+LIMIT
+	100;`
 )
 
 type TraceRecord struct {
@@ -141,12 +168,69 @@ type TraceRecord struct {
 	LinksAttributes    []map[string]any `json:"linksAttributes"`
 }
 
+// Jaeger Query
+
 type ServicesResponse struct {
 	Data   []string `json:"data"`
 	Errors any      `json:"errors"`
 	Limit  int      `json:"limit"`
 	Offset int      `json:"offset"`
 	Total  int      `json:"total"`
+}
+
+type TraceKeyValuePair struct {
+	Key   string `json:"key"`
+	Type  string `json:"type"`
+	Value any    `json:"value"`
+}
+
+type TraceProcess struct {
+	ServiceName string              `json:"serviceName"`
+	Tags        []TraceKeyValuePair `json:"tags"`
+}
+
+type TraceSpanReference struct {
+	RefType string `json:"refType"`
+	SpanID  string `json:"spanID"`
+	TraceID string `json:"traceID"`
+}
+
+// Note: Millisecond epoch time
+type TraceLog struct {
+	Timestamp int64               `json:"timestamp"`
+	Fields    []TraceKeyValuePair `json:"fields"`
+	Name      string              `json:"name"`
+}
+
+// Note: Times are in microseconds
+type Span struct {
+	TraceID       string               `json:"traceID"`
+	SpanID        string               `json:"spanID"`
+	ProcessID     string               `json:"processID"`
+	OperationName string               `json:"operationName"`
+	StartTime     int64                `json:"startTime"`
+	Duration      int64                `json:"duration"`
+	Logs          []TraceLog           `json:"logs"`
+	References    []TraceSpanReference `json:"references"`
+	Tags          []TraceKeyValuePair  `json:"tags"`
+	Warnings      []string             `json:"warnings"`
+	Flags         int                  `json:"flags"`
+	StackTraces   []string             `json:"stackTraces"`
+}
+
+type TraceResponse struct {
+	Processes map[string]TraceProcess `json:"processes"`
+	TraceID   string                  `json:"traceID"`
+	Warnings  []string                `json:"warnings"`
+	Spans     []Span                  `json:"spans"`
+}
+
+type TracesResponse struct {
+	Data   []TraceResponse `json:"data"`
+	Errors any             `json:"errors"`
+	Limit  int             `json:"limit"`
+	Offset int             `json:"offset"`
+	Total  int             `json:"total"`
 }
 
 func convertEvents(events ptrace.SpanEventSlice) (times []time.Time, names, attrs []string, err error) {
@@ -396,6 +480,39 @@ func GetDistinctOperations(ctx context.Context, db *sql.DB, query string) ([]str
 		if err := rows.Scan(&result); err != nil {
 			log.Fatal(err)
 		}
+
+		results = append(results, result)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	return results, nil
+}
+
+func GetTraces(ctx context.Context, db *sql.DB) ([]TraceResponse, error) {
+	rows, err := db.QueryContext(ctx, getTracesSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]TraceResponse, 0)
+	for rows.Next() {
+		var result TraceResponse
+		var spans duckdb.Composite[[]Span]
+
+		err := rows.Scan(
+			&result.TraceID,
+			&spans,
+		)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		result.Spans = spans.Get()
 
 		results = append(results, result)
 	}

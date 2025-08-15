@@ -98,6 +98,27 @@ func (s WebService) getDistinctTraceOperations(w http.ResponseWriter, r *http.Re
 	json.NewEncoder(w).Encode(response)
 }
 
+func (s WebService) getTraces(w http.ResponseWriter, r *http.Request) {
+	data, err := storage.GetTraces(s.ctx, s.db)
+	if err != nil {
+		w.Header().Set("Content-Type", webDefaultContentType)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	response := &storage.TracesResponse{
+		Data:   data,
+		Errors: nil,
+		Limit:  -1,
+		Offset: -1,
+		Total:  len(data),
+	}
+
+	w.Header().Set("Content-Type", webDefaultContentType)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
 func StartWebApp(ctx context.Context, db *sql.DB, addr string, queryLogsSQL string, queryTracesSQL string, queryDistinctTraceServicesSQL string, queryDistinctTraceOperationsSQL string) error {
 	s := &WebService{
 		ctx:                             ctx,
@@ -124,6 +145,7 @@ func StartWebApp(ctx context.Context, db *sql.DB, addr string, queryLogsSQL stri
 	mux.HandleFunc("GET /api/v1/traces", s.getTracesHandler)
 	mux.HandleFunc("GET /api/v1/traces/services", s.getDistinctTraceServices)
 	mux.HandleFunc("GET /api/v1/traces/operations", s.getDistinctTraceOperations)
+	mux.HandleFunc("GET /api/v1/traces/traces", s.getTraces)
 
 	server := &http.Server{
 		Addr:    addr,
