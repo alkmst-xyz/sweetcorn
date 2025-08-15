@@ -22,10 +22,10 @@
 
 	<div>
 		<h2>Services</h2>
-		<p>Total: {data.services.length}</p>
+		<p>Total: {data.services.total}</p>
 		<div>
 			<ul>
-				{#each data.services as item}
+				{#each data.services.data as item}
 					<li>
 						{item}
 					</li>
@@ -36,10 +36,10 @@
 
 	<div>
 		<h2>Operations</h2>
-		<p>Total: {data.operations.length}</p>
+		<p>Total: {data.operations.total}</p>
 		<div>
 			<ul>
-				{#each data.operations as item}
+				{#each data.operations.data as item}
 					<li>
 						{item}
 					</li>
