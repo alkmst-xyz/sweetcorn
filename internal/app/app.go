@@ -67,8 +67,8 @@ func (s WebService) getDistinctTraceServices(w http.ResponseWriter, r *http.Requ
 	response := &storage.ServicesResponse{
 		Data:   data,
 		Errors: nil,
-		Limit:  -1,
-		Offset: -1,
+		Limit:  0,
+		Offset: 0,
 		Total:  len(data),
 	}
 
@@ -88,8 +88,8 @@ func (s WebService) getDistinctTraceOperations(w http.ResponseWriter, r *http.Re
 	response := &storage.ServicesResponse{
 		Data:   data,
 		Errors: nil,
-		Limit:  -1,
-		Offset: -1,
+		Limit:  0,
+		Offset: 0,
 		Total:  len(data),
 	}
 
@@ -111,8 +111,8 @@ func (s WebService) getServiceTraceOperations(w http.ResponseWriter, r *http.Req
 	response := &storage.ServicesResponse{
 		Data:   data,
 		Errors: nil,
-		Limit:  -1,
-		Offset: -1,
+		Limit:  0,
+		Offset: 0,
 		Total:  len(data),
 	}
 
@@ -132,8 +132,8 @@ func (s WebService) getTraces(w http.ResponseWriter, r *http.Request) {
 	response := &storage.TracesResponse{
 		Data:   data,
 		Errors: nil,
-		Limit:  -1,
-		Offset: -1,
+		Limit:  0,
+		Offset: 0,
 		Total:  len(data),
 	}
 
