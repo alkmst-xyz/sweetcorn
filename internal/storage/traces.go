@@ -306,6 +306,8 @@ func QueryTraces(ctx context.Context, db *sql.DB, queryTracesSQL string) ([]Trac
 		var linksTraceStates duckdb.Composite[[]string]
 		var linksAttributes duckdb.Composite[[]map[string]any]
 
+		var duration uint64
+
 		err := rows.Scan(
 			&result.TimestampTime,
 			&result.TraceId,
@@ -319,7 +321,7 @@ func QueryTraces(ctx context.Context, db *sql.DB, queryTracesSQL string) ([]Trac
 			&result.ScopeName,
 			&result.ScopeVersion,
 			&result.SpanAttributes,
-			&result.Duration,
+			&duration,
 			&result.StatusCode,
 			&result.StatusMessage,
 			&eventsTimestamps,
@@ -343,6 +345,9 @@ func QueryTraces(ctx context.Context, db *sql.DB, queryTracesSQL string) ([]Trac
 		result.LinksSpanIds = linksSpanIds.Get()
 		result.LinksTraceStates = linksTraceStates.Get()
 		result.LinksAttributes = linksAttributes.Get()
+
+		// convert nanoseconds to milliseconds
+		result.Duration = duration / 1000
 
 		results = append(results, result)
 	}

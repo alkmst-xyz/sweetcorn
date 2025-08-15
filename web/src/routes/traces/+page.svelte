@@ -61,13 +61,13 @@
 						<ThSort {table} field="spanName">Span Name</ThSort>
 						<ThSort {table} field="spanKind">Span Kind</ThSort>
 						<ThSort {table} field="serviceName">Service Name</ThSort>
-						<ThSort {table} field="resourceAttributes"
-							>Resource Attributes</ThSort
-						>
+						<ThSort {table} field="resourceAttributes">
+							Resource Attributes
+						</ThSort>
 						<ThSort {table} field="scopeName">Scope Name</ThSort>
 						<ThSort {table} field="scopeVersion">Scope Version</ThSort>
 						<ThSort {table} field="spanAttributes">Span Attributes</ThSort>
-						<ThSort {table} field="duration">Duration</ThSort>
+						<ThSort {table} field="duration">Duration (μs)</ThSort>
 						<ThSort {table} field="statusCode">Status Code</ThSort>
 						<ThSort {table} field="statusMessage">Status Message</ThSort>
 						<ThSort {table} field="eventsTimestamps">Events Timestamps</ThSort>
