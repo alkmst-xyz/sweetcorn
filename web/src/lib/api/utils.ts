@@ -1,5 +1,5 @@
-const API_BASE_DEV = 'http://localhost:3000/api';
-const API_BASE_PROD = '/api';
+const API_BASE_DEV = 'http://localhost:13579/';
+const API_BASE_PROD = '/';
 
 function getBaseUrl(): string {
 	// Load API base URL from .env file in development mode.

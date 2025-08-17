@@ -176,11 +176,14 @@ func StartWebApp(ctx context.Context, db *sql.DB, addr string) error {
 	mux.HandleFunc("GET /api/v1/healthz", s.getHealthzHandler)
 	mux.HandleFunc("GET /api/v1/logs", s.getLogsHandler)
 	mux.HandleFunc("GET /api/v1/traces", s.getTracesHandler)
-	mux.HandleFunc("GET /api/v1/jaeger/api/services", s.getDistinctTraceServices)
-	mux.HandleFunc("GET /api/v1/jaeger/api/services/{service_name}/operations", s.getServiceTraceOperations)
-	mux.HandleFunc("GET /api/v1/jaeger/api/operations", s.getDistinctTraceOperations)
-	mux.HandleFunc("GET /api/v1/jaeger/api/traces", s.getTraces)
-	mux.HandleFunc("GET /api/v1/jaeger/api/traces/{trace_id}", s.getTrace)
+
+	// Jaeger Query Internal HTTP API
+	// Ref: https://www.jaegertracing.io/docs/2.9/architecture/apis/#internal-http-json
+	mux.HandleFunc("GET /jaeger/api/services", s.getDistinctTraceServices)
+	mux.HandleFunc("GET /jaeger/api/services/{service_name}/operations", s.getServiceTraceOperations)
+	mux.HandleFunc("GET /jaeger/api/operations", s.getDistinctTraceOperations)
+	mux.HandleFunc("GET /jaeger/api/traces", s.getTraces)
+	mux.HandleFunc("GET /jaeger/api/traces/{trace_id}", s.getTrace)
 
 	server := &http.Server{
 		Addr:    addr,
