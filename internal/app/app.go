@@ -174,12 +174,6 @@ func (s WebService) jaegerSearchTraces(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-type JaegerGetTraceParams struct {
-	TraceID   string
-	StartTime time.Time // optional
-	EndTime   time.Time // optional
-}
-
 const (
 	defaultJaegerQueryLookbackDuration = 1 * time.Hour
 )
@@ -209,8 +203,8 @@ func parseTimeParam(r *http.Request, param string, defaultTimeFn func() time.Tim
 	return t, true
 }
 
-func parseGetTraceParams(r *http.Request) (JaegerGetTraceParams, bool) {
-	params := JaegerGetTraceParams{}
+func parseGetTraceParams(r *http.Request) (storage.GetTraceParams, bool) {
+	params := storage.GetTraceParams{}
 
 	traceID := r.PathValue(jaegerTraceIDParam)
 	if traceID == "" {
@@ -241,7 +235,7 @@ func (s WebService) jaegerGetTrace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := storage.GetTrace(s.ctx, s.db, params.TraceID)
+	result, err := storage.GetTrace(s.ctx, s.db, params)
 
 	// TODO: use proper error responses
 	if err != nil {

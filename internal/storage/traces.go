@@ -590,8 +590,14 @@ func GetTraces(ctx context.Context, db *sql.DB) ([]TraceResponse, error) {
 	return results, nil
 }
 
-func GetTrace(ctx context.Context, db *sql.DB, traceID string) (TraceResponse, error) {
-	row := db.QueryRowContext(ctx, getTraceSQL, traceID)
+type GetTraceParams struct {
+	TraceID   string
+	StartTime time.Time // optional
+	EndTime   time.Time // optional
+}
+
+func GetTrace(ctx context.Context, db *sql.DB, params GetTraceParams) (TraceResponse, error) {
+	row := db.QueryRowContext(ctx, getTraceSQL, params.TraceID)
 
 	var result TraceResponse
 	var spans duckdb.Composite[[]Span]
@@ -601,7 +607,7 @@ func GetTrace(ctx context.Context, db *sql.DB, traceID string) (TraceResponse, e
 		&spans,
 	)
 	if err == sql.ErrNoRows {
-		return result, fmt.Errorf("no trace found with id: %s", traceID)
+		return result, fmt.Errorf("no trace found with id: %s", params.TraceID)
 	}
 	if err != nil {
 		return result, err
