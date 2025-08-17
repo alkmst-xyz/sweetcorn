@@ -24,10 +24,8 @@ import (
 )
 
 type HTTPService struct {
-	ctx             context.Context
-	db              *sql.DB
-	insertLogsSQL   string
-	insertTracesSQL string
+	ctx context.Context
+	db  *sql.DB
 }
 
 //
@@ -243,7 +241,7 @@ func (s HTTPService) handleLogs(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = storage.InsertLogsData(s.ctx, s.db, s.insertLogsSQL, otlpReq.Logs())
+	err = storage.InsertLogsData(s.ctx, s.db, otlpReq.Logs())
 	if err != nil {
 		writeError(resp, enc, err, http.StatusInternalServerError)
 		return
@@ -278,7 +276,7 @@ func (s HTTPService) handleTraces(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = storage.InsertTracesData(s.ctx, s.db, s.insertTracesSQL, otlpReq.Traces())
+	err = storage.InsertTracesData(s.ctx, s.db, otlpReq.Traces())
 	if err != nil {
 		writeError(resp, enc, err, http.StatusInternalServerError)
 		return
@@ -296,12 +294,10 @@ func (s HTTPService) handleTraces(resp http.ResponseWriter, req *http.Request) {
 // Main
 //
 
-func StartHTTPServer(ctx context.Context, db *sql.DB, insertLogsSQL string, insertTracesSQL string, addr string) error {
+func StartHTTPServer(ctx context.Context, db *sql.DB, addr string) error {
 	svc := &HTTPService{
-		ctx:             ctx,
-		db:              db,
-		insertLogsSQL:   insertLogsSQL,
-		insertTracesSQL: insertTracesSQL,
+		ctx: ctx,
+		db:  db,
 	}
 
 	mux := http.NewServeMux()

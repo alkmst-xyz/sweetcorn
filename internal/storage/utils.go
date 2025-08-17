@@ -9,9 +9,7 @@ import (
 )
 
 type Config struct {
-	DataSourceName  string
-	LogsTableName   string
-	TracesTableName string
+	DataSourceName string
 }
 
 func (cfg *Config) OpenDB() (*sql.DB, error) {

@@ -15,7 +15,6 @@ import (
 func withTestDB(t *testing.T, tableName string, fn func(ctx context.Context, cfg *Config, db *sql.DB)) {
 	cfg := &Config{
 		DataSourceName: "",
-		LogsTableName:  tableName,
 	}
 
 	db, err := cfg.OpenDB()
@@ -65,7 +64,6 @@ func generateSampleLogs(count int) plog.Logs {
 func TestOpenDB_InvalidDSN(t *testing.T) {
 	cfg := &Config{
 		DataSourceName: "invalid:://path",
-		LogsTableName:  "bad_dsn_test",
 	}
 
 	_, err := cfg.OpenDB()
@@ -77,7 +75,6 @@ func TestOpenDB_InvalidDSN(t *testing.T) {
 func TestQueryLogs_WithoutTable(t *testing.T) {
 	cfg := &Config{
 		DataSourceName: "",
-		LogsTableName:  "non_existent_table",
 	}
 
 	db, err := cfg.OpenDB()
@@ -86,8 +83,7 @@ func TestQueryLogs_WithoutTable(t *testing.T) {
 	}
 	defer db.Close()
 
-	queryLogsSQL := RenderQueryLogsSQL(cfg)
-	_, err = QueryLogs(context.Background(), db, queryLogsSQL)
+	_, err = QueryLogs(context.Background(), db)
 	if err == nil {
 		t.Fatal("expected error querying non-existent table")
 	}
@@ -96,9 +92,8 @@ func TestQueryLogs_WithoutTable(t *testing.T) {
 func TestInsertLogsData(t *testing.T) {
 	withTestDB(t, "insert_logs", func(ctx context.Context, cfg *Config, db *sql.DB) {
 		logs := generateSampleLogs(1)
-		insertLogsSQL := RenderInsertLogsSQL(cfg)
 
-		if err := InsertLogsData(ctx, db, insertLogsSQL, logs); err != nil {
+		if err := InsertLogsData(ctx, db, logs); err != nil {
 			t.Fatalf("insertLog failed: %v", err)
 		}
 	})
@@ -108,14 +103,12 @@ func TestInsertLogsDataAndQuery(t *testing.T) {
 	withTestDB(t, "insert_logs_and_query", func(ctx context.Context, cfg *Config, db *sql.DB) {
 		numLogs := 10
 		logs := generateSampleLogs(numLogs)
-		insertLogsSQL := RenderInsertLogsSQL(cfg)
-		queryLogsSQL := RenderQueryLogsSQL(cfg)
 
-		if err := InsertLogsData(ctx, db, insertLogsSQL, logs); err != nil {
+		if err := InsertLogsData(ctx, db, logs); err != nil {
 			t.Fatalf("InsertLogsData failed: %v", err)
 		}
 
-		results, err := QueryLogs(ctx, db, queryLogsSQL)
+		results, err := QueryLogs(ctx, db)
 		if err != nil {
 			t.Fatalf("QueryLogs failed: %v", err)
 		}
@@ -136,8 +129,6 @@ func InsertLogsDataWithEmptyAttributes(t *testing.T) {
 	withTestDB(t, "insert_logs_with_empty_attributes", func(ctx context.Context, cfg *Config, db *sql.DB) {
 		numLogs := 1
 		logs := generateSampleLogs(numLogs)
-		insertLogsSQL := RenderInsertLogsSQL(cfg)
-		queryLogsSQL := RenderQueryLogsSQL(cfg)
 
 		resLog := logs.ResourceLogs().At(0)
 		scopeLog := resLog.ScopeLogs().At(0)
@@ -147,11 +138,11 @@ func InsertLogsDataWithEmptyAttributes(t *testing.T) {
 		scopeLog.Scope().Attributes().Clear()
 		scopeLogRecords.Attributes().Clear()
 
-		if err := InsertLogsData(ctx, db, insertLogsSQL, logs); err != nil {
+		if err := InsertLogsData(ctx, db, logs); err != nil {
 			t.Fatalf("InsertLogsData failed: %v", err)
 		}
 
-		results, err := QueryLogs(ctx, db, queryLogsSQL)
+		results, err := QueryLogs(ctx, db)
 		if err != nil {
 			t.Fatalf("QueryLogs failed: %v", err)
 		}

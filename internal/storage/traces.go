@@ -16,7 +16,7 @@ const (
 	createTracesTableSQL = `
 CREATE SEQUENCE IF NOT EXISTS otel_traces_id_seq;
 
-CREATE TABLE IF NOT EXISTS %s (
+CREATE TABLE IF NOT EXISTS otel_traces (
 	id						BIGINT PRIMARY KEY DEFAULT nextval ('otel_traces_id_seq'),
 	timestamp				TIMESTAMP_NS,
 	timestamp_time			TIMESTAMP_S GENERATED ALWAYS AS (CAST(Timestamp AS TIMESTAMP)),
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS %s (
 	links_attributes		JSON[]
 );`
 
-	insertTracesSQLTemplate = `INSERT INTO %s (
+	insertTracesSQL = `INSERT INTO otel_traces (
 	timestamp,
 	trace_id,
 	span_id,
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS %s (
 	links_attributes
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
-	queryTracesSQLTemplate = `SELECT
+	queryTracesSQL = `SELECT
 	timestamp,
 	trace_id,
 	span_id,
@@ -92,30 +92,30 @@ CREATE TABLE IF NOT EXISTS %s (
 	links_trace_states,
 	links_attributes
 FROM
-	%s
+	otel_traces
 ORDER BY
 	timestamp DESC
 LIMIT
 	100;
 `
 
-	queryDistinctTraceServicesSQLTemplate = `
+	queryServicesSQL = `
 SELECT DISTINCT
     service_name
 FROM
-	%s
+	otel_traces
 LIMIT
 	100;`
 
-	queryDistinctTraceOperationsSQLTemplate = `
+	queryOperationsSQL = `
 SELECT DISTINCT
     span_name
 FROM
-	%s
+	otel_traces
 LIMIT
 	100;`
 
-	queryServiceOperationsSQL = `
+	queryOperationsByServiceNameSQL = `
 SELECT DISTINCT
     span_name
 FROM
@@ -308,34 +308,14 @@ func convertLinks(links ptrace.SpanLinkSlice) (traceIDs, spanIDs, states, attrs 
 	return
 }
 
-func renderCreateTracesTableSQL(cfg *Config) string {
-	return fmt.Sprintf(createTracesTableSQL, cfg.TracesTableName)
-}
-
 func CreateTracesTable(ctx context.Context, cfg *Config, db *sql.DB) error {
-	if _, err := db.ExecContext(ctx, renderCreateTracesTableSQL(cfg)); err != nil {
+	if _, err := db.ExecContext(ctx, createTracesTableSQL); err != nil {
 		return fmt.Errorf("exec create traces table sql: %w", err)
 	}
 	return nil
 }
 
-func RenderInsertTracesSQL(cfg *Config) string {
-	return fmt.Sprintf(insertTracesSQLTemplate, cfg.TracesTableName)
-}
-
-func RenderQueryTracesSQL(cfg *Config) string {
-	return fmt.Sprintf(queryTracesSQLTemplate, cfg.TracesTableName)
-}
-
-func RenderQueryDistinctTraceServicesSQL(cfg *Config) string {
-	return fmt.Sprintf(queryDistinctTraceServicesSQLTemplate, cfg.TracesTableName)
-}
-
-func RenderQueryDistinctTraceOperationsSQL(cfg *Config) string {
-	return fmt.Sprintf(queryDistinctTraceOperationsSQLTemplate, cfg.TracesTableName)
-}
-
-func InsertTracesData(ctx context.Context, db *sql.DB, insertSQL string, td ptrace.Traces) error {
+func InsertTracesData(ctx context.Context, db *sql.DB, td ptrace.Traces) error {
 	rsSpans := td.ResourceSpans()
 
 	for i := range rsSpans.Len() {
@@ -377,7 +357,7 @@ func InsertTracesData(ctx context.Context, db *sql.DB, insertSQL string, td ptra
 					return fmt.Errorf("failed to convert json trace links: %w", linksErr)
 				}
 
-				_, err := db.ExecContext(ctx, insertSQL,
+				_, err := db.ExecContext(ctx, insertTracesSQL,
 					span.StartTimestamp().AsTime(),
 					span.TraceID().String(),
 					span.SpanID().String(),
@@ -411,7 +391,7 @@ func InsertTracesData(ctx context.Context, db *sql.DB, insertSQL string, td ptra
 	return nil
 }
 
-func QueryTraces(ctx context.Context, db *sql.DB, queryTracesSQL string) ([]TraceRecord, error) {
+func QueryTraces(ctx context.Context, db *sql.DB) ([]TraceRecord, error) {
 	rows, err := db.QueryContext(ctx, queryTracesSQL)
 	if err != nil {
 		return nil, err
@@ -485,8 +465,8 @@ func QueryTraces(ctx context.Context, db *sql.DB, queryTracesSQL string) ([]Trac
 	return results, nil
 }
 
-func GetDistinctServices(ctx context.Context, db *sql.DB, query string) ([]string, error) {
-	rows, err := db.QueryContext(ctx, query)
+func GetDistinctServices(ctx context.Context, db *sql.DB) ([]string, error) {
+	rows, err := db.QueryContext(ctx, queryServicesSQL)
 	if err != nil {
 		return nil, err
 	}
@@ -509,8 +489,8 @@ func GetDistinctServices(ctx context.Context, db *sql.DB, query string) ([]strin
 	return results, nil
 }
 
-func GetDistinctOperations(ctx context.Context, db *sql.DB, query string) ([]string, error) {
-	rows, err := db.QueryContext(ctx, query)
+func GetDistinctOperations(ctx context.Context, db *sql.DB) ([]string, error) {
+	rows, err := db.QueryContext(ctx, queryOperationsSQL)
 	if err != nil {
 		return nil, err
 	}
@@ -534,7 +514,7 @@ func GetDistinctOperations(ctx context.Context, db *sql.DB, query string) ([]str
 }
 
 func GetServiceOperations(ctx context.Context, db *sql.DB, serviceName string) ([]string, error) {
-	rows, err := db.QueryContext(ctx, queryServiceOperationsSQL, serviceName)
+	rows, err := db.QueryContext(ctx, queryOperationsByServiceNameSQL, serviceName)
 	if err != nil {
 		return nil, err
 	}
