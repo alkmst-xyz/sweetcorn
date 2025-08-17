@@ -21,13 +21,13 @@ const (
 	jaegerTraceIDParam   = "traceID"
 	jaegerStartTimeParam = "start"
 	jaegerEndTimeParam   = "end"
+	jaegerServiceParam   = "service"
+	jaegerSpanKindParam  = "spanKind"
 )
 
 type WebService struct {
-	ctx            context.Context
-	db             *sql.DB
-	queryLogsSQL   string
-	queryTracesSQL string
+	ctx context.Context
+	db  *sql.DB
 }
 
 func (s WebService) getHealthzHandler(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +63,7 @@ func (s WebService) getTracesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s WebService) jaegerServices(w http.ResponseWriter, r *http.Request) {
-	data, err := storage.GetDistinctServices(s.ctx, s.db)
+	services, err := storage.GetDistinctServices(s.ctx, s.db)
 	if err != nil {
 		w.Header().Set("Content-Type", webDefaultContentType)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -71,11 +71,11 @@ func (s WebService) jaegerServices(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := &storage.ServicesResponse{
-		Data:   data,
+		Data:   services,
 		Errors: nil,
 		Limit:  0,
 		Offset: 0,
-		Total:  len(data),
+		Total:  len(services),
 	}
 
 	w.Header().Set("Content-Type", webDefaultContentType)
@@ -83,8 +83,30 @@ func (s WebService) jaegerServices(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+func parseGetOperationsParams(r *http.Request) (storage.GetOperationsParams, bool) {
+	params := storage.GetOperationsParams{}
+
+	service := r.FormValue(jaegerServiceParam)
+	if service == "" {
+		return params, false
+	}
+
+	spanKind := r.FormValue(jaegerSpanKindParam)
+
+	params.ServiceName = service
+	params.SpanKind = spanKind
+
+	return params, true
+}
+
 func (s WebService) jaegerOperations(w http.ResponseWriter, r *http.Request) {
-	data, err := storage.GetDistinctOperations(s.ctx, s.db)
+	params, ok := parseGetOperationsParams(r)
+	if !ok {
+		// TODO: return error
+		return
+	}
+
+	data, err := storage.GetOperations(s.ctx, s.db, params)
 	if err != nil {
 		w.Header().Set("Content-Type", webDefaultContentType)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -105,9 +127,13 @@ func (s WebService) jaegerOperations(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s WebService) jaegerOperationsLegacy(w http.ResponseWriter, r *http.Request) {
-	serviceName := r.PathValue("service_name")
+	service := r.PathValue(jaegerServiceParam)
 
-	data, err := storage.GetServiceOperations(s.ctx, s.db, serviceName)
+	data, err := storage.GetOperations(s.ctx, s.db,
+		storage.GetOperationsParams{
+			ServiceName: service,
+			SpanKind:    "",
+		})
 	if err != nil {
 		w.Header().Set("Content-Type", webDefaultContentType)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -252,9 +278,10 @@ func StartWebApp(ctx context.Context, db *sql.DB, addr string) error {
 
 	// Jaeger Query Internal HTTP API
 	// Ref: https://www.jaegertracing.io/docs/2.9/architecture/apis/#internal-http-json
+	// TODO: remove hard coded path match parameters
 	mux.HandleFunc("GET /jaeger/api/services", s.jaegerServices)
 	mux.HandleFunc("GET /jaeger/api/operations", s.jaegerOperations)
-	mux.HandleFunc("GET /jaeger/api/services/{service_name}/operations", s.jaegerOperationsLegacy)
+	mux.HandleFunc("GET /jaeger/api/services/{service}/operations", s.jaegerOperationsLegacy)
 	mux.HandleFunc("GET /jaeger/api/traces", s.jaegerSearchTraces)
 	mux.HandleFunc("GET /jaeger/api/traces/{traceID}", s.jaegerGetTrace)
 

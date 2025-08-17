@@ -112,14 +112,6 @@ SELECT DISTINCT
     span_name
 FROM
 	otel_traces
-LIMIT
-	100;`
-
-	queryOperationsByServiceNameSQL = `
-SELECT DISTINCT
-    span_name
-FROM
-	otel_traces
 WHERE
 	service_name = ?
 LIMIT
@@ -489,32 +481,13 @@ func GetDistinctServices(ctx context.Context, db *sql.DB) ([]string, error) {
 	return results, nil
 }
 
-func GetDistinctOperations(ctx context.Context, db *sql.DB) ([]string, error) {
-	rows, err := db.QueryContext(ctx, queryOperationsSQL)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	results := make([]string, 0)
-	for rows.Next() {
-		var result string
-		if err := rows.Scan(&result); err != nil {
-			log.Fatal(err)
-		}
-
-		results = append(results, result)
-	}
-
-	if err := rows.Err(); err != nil {
-		log.Fatal(err)
-	}
-
-	return results, nil
+type GetOperationsParams struct {
+	ServiceName string
+	SpanKind    string
 }
 
-func GetServiceOperations(ctx context.Context, db *sql.DB, serviceName string) ([]string, error) {
-	rows, err := db.QueryContext(ctx, queryOperationsByServiceNameSQL, serviceName)
+func GetOperations(ctx context.Context, db *sql.DB, params GetOperationsParams) ([]string, error) {
+	rows, err := db.QueryContext(ctx, queryOperationsSQL, params.ServiceName)
 	if err != nil {
 		return nil, err
 	}
