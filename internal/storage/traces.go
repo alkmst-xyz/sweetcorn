@@ -140,7 +140,11 @@ SELECT
 			"SpanID" := span_id,
 			"OperationName" := span_name,
 			"StartTime" := epoch_us(timestamp),
-			"Duration" := duration // 1000
+			"Duration" := duration // 1000,
+			"ParentName" := parent_span_id,
+			"SpanAttributes" := span_attributes,
+			"ScopeName" := scope_name,
+			"SpanKind" := span_kind
 		)
 	) as spans
 FROM
@@ -161,7 +165,11 @@ SELECT
 			"SpanID" := span_id,
 			"OperationName" := span_name,
 			"StartTime" := epoch_us(timestamp),
-			"Duration" := duration // 1000
+			"Duration" := duration // 1000,
+			"ParentName" := parent_span_id,
+			"SpanAttributes" := span_attributes,
+			"ScopeName" := scope_name,
+			"SpanKind" := span_kind
 		)
 	) as spans
 FROM
@@ -233,18 +241,23 @@ type TraceLog struct {
 
 // Note: Times are in microseconds
 type Span struct {
-	TraceID       string               `json:"traceID"`
-	SpanID        string               `json:"spanID"`
-	ProcessID     string               `json:"processID"`
-	OperationName string               `json:"operationName"`
-	StartTime     int64                `json:"startTime"`
-	Duration      int64                `json:"duration"`
-	Logs          []TraceLog           `json:"logs"`
-	References    []TraceSpanReference `json:"references"`
-	Tags          []TraceKeyValuePair  `json:"tags"`
-	Warnings      []string             `json:"warnings"`
-	Flags         int                  `json:"flags"`
-	StackTraces   []string             `json:"stackTraces"`
+	TraceID        string               `json:"traceID"`
+	SpanID         string               `json:"spanID"`
+	ProcessID      string               `json:"processID"`
+	OperationName  string               `json:"operationName"`
+	StartTime      int64                `json:"startTime"`
+	Duration       int64                `json:"duration"`
+	Logs           []TraceLog           `json:"logs"`
+	References     []TraceSpanReference `json:"references"`
+	Tags           []TraceKeyValuePair  `json:"tags"`
+	Warnings       []string             `json:"warnings"`
+	Flags          int                  `json:"-"` // TODO: check if present
+	StackTraces    []string             `json:"-"` // TODO: check if present
+	ParentName     string               `json:"-"` // TODO: remove
+	SpanAttributes map[string]any       `json:"-"` // TODO: remove
+	ScopeName      string               `json:"-"` // TODO: remove
+	SpanKind       string               `json:"-"` // TODO: remove
+
 }
 
 type TraceResponse struct {
@@ -565,7 +578,54 @@ func GetTraces(ctx context.Context, db *sql.DB) ([]TraceResponse, error) {
 			log.Fatal(err)
 		}
 
-		result.Spans = spans.Get()
+		// processes
+		result.Processes = make(map[string]TraceProcess)
+		result.Processes["p1"] = TraceProcess{
+			ServiceName: "telemetrygen",
+			Tags:        []TraceKeyValuePair{},
+		}
+
+		// spans
+		spansRaw := spans.Get()
+		for i := range len(spansRaw) {
+			span := spansRaw[i]
+
+			span.Logs = make([]TraceLog, 0)
+			span.ProcessID = "p1"
+			span.References = make([]TraceSpanReference, 0)
+			span.Tags = make([]TraceKeyValuePair, 0)
+
+			if span.ParentName != "" {
+				reference := TraceSpanReference{
+					RefType: "CHILD_OF",
+					TraceID: result.TraceID,
+					SpanID:  span.ParentName,
+				}
+				span.References = append(span.References, reference)
+			}
+
+			// tags
+			span.Tags = make([]TraceKeyValuePair, 0)
+			for key, value := range span.SpanAttributes {
+				span.Tags = append(span.Tags, TraceKeyValuePair{
+					Key:   key,
+					Type:  "string",
+					Value: value,
+				})
+			}
+			span.Tags = append(span.Tags, TraceKeyValuePair{
+				Key:   "otel.scope.name",
+				Type:  "string",
+				Value: span.ScopeName,
+			})
+			span.Tags = append(span.Tags, TraceKeyValuePair{
+				Key:   "span.kind",
+				Type:  "string",
+				Value: span.SpanKind,
+			})
+
+			result.Spans = append(result.Spans, span)
+		}
 
 		results = append(results, result)
 	}
@@ -594,7 +654,48 @@ func GetTrace(ctx context.Context, db *sql.DB, traceID string) (TraceResponse, e
 		return result, err
 	}
 
-	result.Spans = spans.Get()
+	// result.Spans = spans.Get()
+
+	spansRaw := spans.Get()
+	for i := range len(spansRaw) {
+		span := spansRaw[i]
+
+		span.Logs = make([]TraceLog, 0)
+		span.ProcessID = "p1"
+		span.References = make([]TraceSpanReference, 0)
+		span.Tags = make([]TraceKeyValuePair, 0)
+
+		if span.ParentName != "" {
+			reference := TraceSpanReference{
+				RefType: "CHILD_OF",
+				TraceID: result.TraceID,
+				SpanID:  span.ParentName,
+			}
+			span.References = append(span.References, reference)
+		}
+
+		// tags
+		span.Tags = make([]TraceKeyValuePair, 0)
+		for key, value := range span.SpanAttributes {
+			span.Tags = append(span.Tags, TraceKeyValuePair{
+				Key:   key,
+				Type:  "string",
+				Value: value,
+			})
+		}
+		span.Tags = append(span.Tags, TraceKeyValuePair{
+			Key:   "otel.scope.name",
+			Type:  "string",
+			Value: span.ScopeName,
+		})
+		span.Tags = append(span.Tags, TraceKeyValuePair{
+			Key:   "span.kind",
+			Type:  "string",
+			Value: span.SpanKind,
+		})
+
+		result.Spans = append(result.Spans, span)
+	}
 
 	return result, nil
 }
