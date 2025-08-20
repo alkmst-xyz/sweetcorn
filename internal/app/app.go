@@ -83,30 +83,26 @@ func (s WebService) jaegerServices(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func parseGetOperationsParams(r *http.Request) (storage.GetOperationsParams, bool) {
-	params := storage.GetOperationsParams{}
+func parseTraceOperationsParams(r *http.Request) storage.TraceOperationsParams {
+	q := r.URL.Query()
 
-	service := r.FormValue(jaegerServiceParam)
-	if service == "" {
-		return params, false
+	var p storage.TraceOperationsParams
+
+	if vals, ok := q[jaegerServiceParam]; ok {
+		p.ServiceName = &vals[0]
 	}
 
-	spanKind := r.FormValue(jaegerSpanKindParam)
+	if vals, ok := q[jaegerSpanKindParam]; ok {
+		p.SpanKind = &vals[0]
+	}
 
-	params.ServiceName = service
-	params.SpanKind = spanKind
-
-	return params, true
+	return p
 }
 
 func (s WebService) jaegerOperations(w http.ResponseWriter, r *http.Request) {
-	params, ok := parseGetOperationsParams(r)
-	if !ok {
-		// TODO: return error
-		return
-	}
+	params := parseTraceOperationsParams(r)
 
-	data, err := storage.GetOperations(s.ctx, s.db, params)
+	data, err := storage.TraceOperations(s.ctx, s.db, params)
 	if err != nil {
 		w.Header().Set("Content-Type", webDefaultContentType)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -129,10 +125,9 @@ func (s WebService) jaegerOperations(w http.ResponseWriter, r *http.Request) {
 func (s WebService) jaegerOperationsLegacy(w http.ResponseWriter, r *http.Request) {
 	service := r.PathValue(jaegerServiceParam)
 
-	data, err := storage.GetOperations(s.ctx, s.db,
-		storage.GetOperationsParams{
-			ServiceName: service,
-			SpanKind:    "",
+	data, err := storage.TraceOperations(s.ctx, s.db,
+		storage.TraceOperationsParams{
+			ServiceName: &service,
 		})
 	if err != nil {
 		w.Header().Set("Content-Type", webDefaultContentType)
