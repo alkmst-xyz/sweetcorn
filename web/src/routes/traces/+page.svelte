@@ -54,9 +54,9 @@
 				<thead>
 					<tr>
 						<ThSort {table} field="timestamp">Timestamp</ThSort>
-						<ThSort {table} field="traceId">Trace ID</ThSort>
-						<ThSort {table} field="spanId">Span ID</ThSort>
-						<ThSort {table} field="parentSpanId">Parent Span ID</ThSort>
+						<ThSort {table} field="traceID">Trace ID</ThSort>
+						<ThSort {table} field="spanID">Span ID</ThSort>
+						<ThSort {table} field="parentSpanID">Parent Span ID</ThSort>
 						<ThSort {table} field="traceState">Trace State</ThSort>
 						<ThSort {table} field="spanName">Span Name</ThSort>
 						<ThSort {table} field="spanKind">Span Kind</ThSort>
@@ -73,16 +73,16 @@
 						<ThSort {table} field="eventsTimestamps">Events Timestamps</ThSort>
 						<ThSort {table} field="eventsNames">Events Names</ThSort>
 						<ThSort {table} field="eventsAttributes">Events Attributes</ThSort>
-						<ThSort {table} field="linksTraceIds">Links Trace IDs</ThSort>
-						<ThSort {table} field="linksSpanIds">Links Span IDs</ThSort>
+						<ThSort {table} field="linksTraceIDs">Links Trace IDs</ThSort>
+						<ThSort {table} field="linksSpanIDs">Links Span IDs</ThSort>
 						<ThSort {table} field="linksTraceStates">Links Trace States</ThSort>
 						<ThSort {table} field="linksAttributes">Links Attributes</ThSort>
 					</tr>
 					<tr>
 						<ThFilter {table} field="timestamp" />
-						<ThFilter {table} field="traceId" />
-						<ThFilter {table} field="spanId" />
-						<ThFilter {table} field="parentSpanId" />
+						<ThFilter {table} field="traceID" />
+						<ThFilter {table} field="spanID" />
+						<ThFilter {table} field="parentSpanID" />
 						<ThFilter {table} field="traceState" />
 						<ThFilter {table} field="spanName" />
 						<ThFilter {table} field="spanKind" />
@@ -97,8 +97,8 @@
 						<ThFilter {table} field="eventsTimestamps" />
 						<ThFilter {table} field="eventsNames" />
 						<ThFilter {table} field="eventsAttributes" />
-						<ThFilter {table} field="linksTraceIds" />
-						<ThFilter {table} field="linksSpanIds" />
+						<ThFilter {table} field="linksTraceIDs" />
+						<ThFilter {table} field="linksSpanIDs" />
 						<ThFilter {table} field="linksTraceStates" />
 						<ThFilter {table} field="linksAttributes" />
 					</tr>
