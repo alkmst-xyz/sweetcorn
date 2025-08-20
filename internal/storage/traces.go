@@ -596,13 +596,13 @@ func GetTraces(ctx context.Context, db *sql.DB) ([]TraceResponse, error) {
 	return results, nil
 }
 
-type GetTraceParams struct {
-	TraceID   string
-	StartTime time.Time // optional
-	EndTime   time.Time // optional
+type TraceParams struct {
+	TraceID   *string
+	StartTime *time.Time
+	EndTime   *time.Time
 }
 
-func GetTrace(ctx context.Context, db *sql.DB, params GetTraceParams) (TraceResponse, error) {
+func Trace(ctx context.Context, db *sql.DB, params TraceParams) (TraceResponse, error) {
 	row := db.QueryRowContext(ctx, getTraceSQL, params.TraceID)
 
 	var result TraceResponse

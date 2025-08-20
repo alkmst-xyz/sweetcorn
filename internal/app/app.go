@@ -88,10 +88,12 @@ func parseTraceOperationsParams(r *http.Request) storage.TraceOperationsParams {
 
 	var p storage.TraceOperationsParams
 
+	// ?service
 	if vals, ok := q[jaegerServiceParam]; ok {
 		p.ServiceName = &vals[0]
 	}
 
+	// ?spanKind
 	if vals, ok := q[jaegerSpanKindParam]; ok {
 		p.SpanKind = &vals[0]
 	}
@@ -181,56 +183,81 @@ func defaultEndTime() time.Time {
 	return time.Now()
 }
 
-func parseTimeParam(r *http.Request, param string, defaultTimeFn func() time.Time) (time.Time, bool) {
-	val := r.FormValue(param)
-
-	if val == "" {
-		return defaultTimeFn(), true
-	}
-
+// parseUnixMicros parses a string containing a Unix timestamp in microseconds.
+func parseUnixMicros(val string) (time.Time, error) {
 	i, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {
-		return time.Time{}, false
+		return time.Time{}, err
 	}
 
-	t := time.Unix(0, 0).Add(time.Duration(i) * time.Microsecond)
-
-	return t, true
+	return time.Unix(0, 0).Add(time.Duration(i) * time.Microsecond), nil
 }
 
-func parseGetTraceParams(r *http.Request) (storage.GetTraceParams, bool) {
-	params := storage.GetTraceParams{}
-
-	traceID := r.PathValue(jaegerTraceIDParam)
-	if traceID == "" {
-		return params, false
+// parseTimeParam parses a sting into a Unix timestamp. If the provided
+// string is empty, it uses the provided defaultTimeFn.
+func parseTimeParam(raw string, defaultTimeFn func() time.Time) (*time.Time, error) {
+	if raw == "" {
+		t := defaultTimeFn()
+		return &t, nil
 	}
 
-	startTime, ok := parseTimeParam(r, jaegerStartTimeParam, defaultStartTime)
-	if !ok {
-		return params, false
+	t, err := parseUnixMicros(raw)
+	if err != nil {
+		return nil, err
 	}
 
-	endTime, ok := parseTimeParam(r, jaegerEndTimeParam, defaultEndTime)
-	if !ok {
-		return params, false
-	}
-
-	params.TraceID = traceID
-	params.StartTime = startTime
-	params.EndTime = endTime
-
-	return params, true
+	return &t, nil
 }
 
-func (s WebService) jaegerGetTrace(w http.ResponseWriter, r *http.Request) {
-	params, ok := parseGetTraceParams(r)
+func parseTraceParams(r *http.Request) (storage.TraceParams, bool) {
+	q := r.URL.Query()
+
+	var p storage.TraceParams
+
+	// ?traceID
+	if vals, ok := q[jaegerTraceIDParam]; ok {
+		traceID := vals[0]
+
+		if traceID == "" {
+			return p, false
+		}
+
+		p.TraceID = &traceID
+	}
+
+	// ?start
+	if vals, ok := q[jaegerStartTimeParam]; ok {
+		t, err := parseTimeParam(vals[0], defaultStartTime)
+
+		if err != nil {
+			return p, false
+		}
+
+		p.StartTime = t
+	}
+
+	// ?end
+	if vals, ok := q[jaegerEndTimeParam]; ok {
+		t, err := parseTimeParam(vals[0], defaultEndTime)
+
+		if err != nil {
+			return p, false
+		}
+
+		p.EndTime = t
+	}
+
+	return p, true
+}
+
+func (s WebService) jaegerTrace(w http.ResponseWriter, r *http.Request) {
+	params, ok := parseTraceParams(r)
 	if !ok {
 		// TODO: return error
 		return
 	}
 
-	result, err := storage.GetTrace(s.ctx, s.db, params)
+	result, err := storage.Trace(s.ctx, s.db, params)
 
 	// TODO: use proper error responses
 	if err != nil {
@@ -272,7 +299,7 @@ func StartWebApp(ctx context.Context, db *sql.DB, addr string) error {
 	mux.HandleFunc("GET /jaeger/api/operations", s.jaegerOperations)
 	mux.HandleFunc("GET /jaeger/api/services/{service}/operations", s.jaegerOperationsLegacy)
 	mux.HandleFunc("GET /jaeger/api/traces", s.jaegerSearchTraces)
-	mux.HandleFunc("GET /jaeger/api/traces/{traceID}", s.jaegerGetTrace)
+	mux.HandleFunc("GET /jaeger/api/traces/{traceID}", s.jaegerTrace)
 
 	server := &http.Server{
 		Addr:    addr,
