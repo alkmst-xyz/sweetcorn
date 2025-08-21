@@ -613,7 +613,7 @@ func Trace(ctx context.Context, db *sql.DB, params TraceParams) (TraceResponse, 
 		&spans,
 	)
 	if err == sql.ErrNoRows {
-		return result, fmt.Errorf("no trace found with id: %s", params.TraceID)
+		return result, fmt.Errorf("no trace found with id: %s", *params.TraceID)
 	}
 	if err != nil {
 		return result, err
