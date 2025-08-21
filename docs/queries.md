@@ -307,6 +307,18 @@ WHERE TraceId = trace_id
 Limit 100;
 ```
 
+- [x] Spans grouped by trace id.
+
+```sql
+SELECT
+    trace_id,
+    array_agg(struct_pack(span_id:=span_id, span_nam:= span_name)) AS spans
+FROM
+    otel_traces
+GROUP BY
+    trace_id;
+```
+
 ## Indexes
 
 Add indexes to improve query performance.
