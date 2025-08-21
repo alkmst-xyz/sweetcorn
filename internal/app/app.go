@@ -125,12 +125,16 @@ func (s WebService) jaegerOperations(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s WebService) jaegerOperationsLegacy(w http.ResponseWriter, r *http.Request) {
-	service := r.PathValue(jaegerServiceParam)
+	q := r.URL.Query()
 
-	data, err := storage.TraceOperations(s.ctx, s.db,
-		storage.TraceOperationsParams{
-			ServiceName: &service,
-		})
+	var params storage.TraceOperationsParams
+
+	// ?service
+	if vals, ok := q[jaegerServiceParam]; ok {
+		params.ServiceName = &vals[0]
+	}
+
+	data, err := storage.TraceOperations(s.ctx, s.db, params)
 	if err != nil {
 		w.Header().Set("Content-Type", webDefaultContentType)
 		w.WriteHeader(http.StatusInternalServerError)
