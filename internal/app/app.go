@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -23,6 +24,7 @@ const (
 	jaegerEndTimeParam   = "end"
 	jaegerServiceParam   = "service"
 	jaegerSpanKindParam  = "spanKind"
+	jaegerOperationParam = "operation"
 )
 
 type WebService struct {
@@ -154,9 +156,56 @@ func (s WebService) jaegerOperationsLegacy(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(response)
 }
 
+func parseSearchTracesParams(r *http.Request) (storage.SearchTracesParams, bool) {
+	q := r.URL.Query()
+
+	var p storage.SearchTracesParams
+
+	// ?service
+	if vals, ok := q[jaegerServiceParam]; ok {
+		p.ServiceName = &vals[0]
+	}
+
+	// ?operation
+	if vals, ok := q[jaegerOperationParam]; ok {
+		p.OperationName = &vals[0]
+	}
+
+	// ?start
+	if vals, ok := q[jaegerStartTimeParam]; ok {
+		t, err := parseTimeParam(vals[0], defaultStartTime)
+
+		if err != nil {
+			return p, false
+		}
+
+		p.StartTimeMin = t
+	}
+
+	// ?end
+	if vals, ok := q[jaegerEndTimeParam]; ok {
+		t, err := parseTimeParam(vals[0], defaultEndTime)
+
+		if err != nil {
+			return p, false
+		}
+
+		p.StartTimeMax = t
+	}
+
+	return p, true
+}
+
 func (s WebService) jaegerSearchTraces(w http.ResponseWriter, r *http.Request) {
-	data, err := storage.GetTraces(s.ctx, s.db)
+	params, ok := parseSearchTracesParams(r)
+	if !ok {
+		// TODO: return error
+		return
+	}
+
+	data, err := storage.SearchTraces(s.ctx, s.db, params)
 	if err != nil {
+		io.WriteString(w, err.Error())
 		w.Header().Set("Content-Type", webDefaultContentType)
 		w.WriteHeader(http.StatusInternalServerError)
 		return

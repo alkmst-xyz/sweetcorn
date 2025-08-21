@@ -124,7 +124,7 @@ LIMIT
 	// TODO:
 	// - AND CAST(timestamp AS TIMESTAMP) >= NOW() - INTERVAL '1 hour'
 	// - AND (span_attributes->>'$."peer.service"') = 'telemetrygen-server'
-	getTracesSQL = `
+	tracesSQL = `
 SELECT
 	trace_id,
 	array_agg(
@@ -143,13 +143,13 @@ SELECT
 FROM
 	otel_traces
 WHERE
-    service_name = 'telemetrygen'
+	(? IS NULL OR service_name = ?)
 GROUP BY
 	trace_id
 LIMIT
 	100;`
 
-	getTraceSQL = `
+	traceSQL = `
 SELECT
 	trace_id,
 	array_agg(
@@ -516,8 +516,22 @@ func TraceOperations(ctx context.Context, db *sql.DB, params TraceOperationsPara
 	return results, nil
 }
 
-func GetTraces(ctx context.Context, db *sql.DB) ([]TraceResponse, error) {
-	rows, err := db.QueryContext(ctx, getTracesSQL)
+type SearchTracesParams struct {
+	ServiceName   *string
+	OperationName *string
+	Tags          *map[string]string
+	StartTimeMin  *time.Time
+	StartTimeMax  *time.Time
+	DurationMin   *time.Duration
+	DurationMax   *time.Duration
+	NumTraces     *int
+}
+
+func SearchTraces(ctx context.Context, db *sql.DB, params SearchTracesParams) ([]TraceResponse, error) {
+	rows, err := db.QueryContext(ctx, tracesSQL,
+		params.ServiceName,
+		params.ServiceName,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -603,7 +617,7 @@ type TraceParams struct {
 }
 
 func Trace(ctx context.Context, db *sql.DB, params TraceParams) (TraceResponse, error) {
-	row := db.QueryRowContext(ctx, getTraceSQL, params.TraceID)
+	row := db.QueryRowContext(ctx, traceSQL, params.TraceID)
 
 	var result TraceResponse
 	var spans duckdb.Composite[[]Span]
