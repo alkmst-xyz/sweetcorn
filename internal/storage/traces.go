@@ -611,7 +611,7 @@ func SearchTraces(ctx context.Context, db *sql.DB, params SearchTracesParams) ([
 }
 
 type TraceParams struct {
-	TraceID   *string
+	TraceID   string
 	StartTime *time.Time
 	EndTime   *time.Time
 }
@@ -627,13 +627,11 @@ func Trace(ctx context.Context, db *sql.DB, params TraceParams) (TraceResponse, 
 		&spans,
 	)
 	if err == sql.ErrNoRows {
-		return result, fmt.Errorf("no trace found with id: %s", *params.TraceID)
+		return result, fmt.Errorf("no trace found with id: %s", params.TraceID)
 	}
 	if err != nil {
 		return result, err
 	}
-
-	// result.Spans = spans.Get()
 
 	spansRaw := spans.Get()
 	for i := range len(spansRaw) {

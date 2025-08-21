@@ -267,16 +267,12 @@ func parseTraceParams(r *http.Request) (storage.TraceParams, bool) {
 
 	var p storage.TraceParams
 
-	// ?traceID
-	if vals, ok := q[jaegerTraceIDParam]; ok {
-		traceID := vals[0]
-
-		if traceID == "" {
-			return p, false
-		}
-
-		p.TraceID = &traceID
+	// {traceID}
+	traceID := r.PathValue(jaegerTraceIDParam)
+	if traceID == "" {
+		return p, false
 	}
+	p.TraceID = traceID
 
 	// ?start
 	if vals, ok := q[jaegerStartTimeParam]; ok {
