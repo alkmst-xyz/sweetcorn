@@ -244,8 +244,8 @@ type Span struct {
 	References     []TraceSpanReference `json:"references"`
 	Tags           []TraceKeyValuePair  `json:"tags"`
 	Warnings       []string             `json:"warnings"`
-	Flags          int                  `json:"-"` // TODO: check if present
-	StackTraces    []string             `json:"-"` // TODO: check if present
+	Flags          int                  `json:"flags"`
+	StackTraces    []string             `json:"stackTraces"`
 	ParentName     string               `json:"-"` // TODO: remove
 	SpanAttributes map[string]any       `json:"-"` // TODO: remove
 	ScopeName      string               `json:"-"` // TODO: remove
@@ -552,6 +552,7 @@ func SearchTraces(ctx context.Context, db *sql.DB, params SearchTracesParams) ([
 		}
 
 		// processes
+		// TODO: hardcoded
 		result.Processes = make(map[string]TraceProcess)
 		result.Processes["p1"] = TraceProcess{
 			ServiceName: "telemetrygen",
@@ -564,9 +565,12 @@ func SearchTraces(ctx context.Context, db *sql.DB, params SearchTracesParams) ([
 			span := spansRaw[i]
 
 			span.Logs = make([]TraceLog, 0)
-			span.ProcessID = "p1"
 			span.References = make([]TraceSpanReference, 0)
 			span.Tags = make([]TraceKeyValuePair, 0)
+			span.StackTraces = make([]string, 0)
+
+			// TODO: hardcoded
+			span.ProcessID = "p1"
 
 			if span.ParentName != "" {
 				reference := TraceSpanReference{
@@ -633,14 +637,25 @@ func Trace(ctx context.Context, db *sql.DB, params TraceParams) (TraceResponse, 
 		return result, err
 	}
 
+	// processes
+	// TODO: hardcoded
+	result.Processes = make(map[string]TraceProcess)
+	result.Processes["p1"] = TraceProcess{
+		ServiceName: "telemetrygen",
+		Tags:        []TraceKeyValuePair{},
+	}
+
 	spansRaw := spans.Get()
 	for i := range len(spansRaw) {
 		span := spansRaw[i]
 
 		span.Logs = make([]TraceLog, 0)
-		span.ProcessID = "p1"
 		span.References = make([]TraceSpanReference, 0)
 		span.Tags = make([]TraceKeyValuePair, 0)
+		span.StackTraces = make([]string, 0)
+
+		// TODO: hardcoded
+		span.ProcessID = "p1"
 
 		if span.ParentName != "" {
 			reference := TraceSpanReference{
