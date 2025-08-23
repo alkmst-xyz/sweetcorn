@@ -329,6 +329,54 @@ func (s WebService) jaegerTrace(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(&response)
 }
 
+func parseDependenciesParams(r *http.Request) (storage.DependenciesParams, bool) {
+	q := r.URL.Query()
+
+	var p storage.DependenciesParams
+
+	// ?end
+	if vals, ok := q[jaegerEndTimeParam]; ok {
+		t, err := parseTimeParam(vals[0], defaultEndTime)
+
+		if err != nil {
+			return p, false
+		}
+
+		p.EndTime = t
+	}
+
+	// TODO: ?lookback
+
+	return p, true
+}
+
+func (s WebService) jaegerDependencies(w http.ResponseWriter, r *http.Request) {
+	params, ok := parseDependenciesParams(r)
+	if !ok {
+		// TODO: return error
+		return
+	}
+
+	data, err := storage.Dependencies(s.ctx, s.db, params)
+
+	// TODO: use proper error responses
+	if err != nil {
+		io.WriteString(w, err.Error())
+		w.Header().Set("Content-Type", webDefaultContentType)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	response := storage.DependenciesResponse{
+		Data:   data,
+		Errors: nil,
+	}
+
+	w.Header().Set("Content-Type", webDefaultContentType)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(&response)
+}
+
 func StartWebApp(ctx context.Context, db *sql.DB, addr string) error {
 	s := &WebService{
 		ctx: ctx,
@@ -358,6 +406,7 @@ func StartWebApp(ctx context.Context, db *sql.DB, addr string) error {
 	mux.HandleFunc("GET /jaeger/api/services/{service}/operations", s.jaegerOperationsLegacy)
 	mux.HandleFunc("GET /jaeger/api/traces", s.jaegerSearchTraces)
 	mux.HandleFunc("GET /jaeger/api/traces/{traceID}", s.jaegerTrace)
+	mux.HandleFunc("GET /jaeger/api/dependencies", s.jaegerDependencies)
 
 	server := &http.Server{
 		Addr:    addr,

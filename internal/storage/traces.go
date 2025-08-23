@@ -171,6 +171,26 @@ WHERE
 	trace_id = ?
 GROUP BY
 	trace_id;`
+
+	dependenciesSQL = `
+SELECT DISTINCT
+    (
+        SELECT
+            p.service_name
+        FROM
+            otel_traces AS p
+        WHERE
+            p.span_id = c.parent_span_id
+    ) AS parent_service_name,
+    c.service_name AS child_service_name,
+    COUNT(*) AS count
+FROM
+    otel_traces as c
+WHERE
+    c.parent_span_id != ''
+GROUP BY
+    parent_service_name,
+    child_service_name;`
 )
 
 type TraceRecord struct {
@@ -266,6 +286,22 @@ type TracesResponse struct {
 	Limit  int             `json:"limit"`
 	Offset int             `json:"offset"`
 	Total  int             `json:"total"`
+}
+
+type DependenciesData struct {
+	ParentServiceName string `json:"parent"`
+	ChildServiceName  string `json:"child"`
+	Count             int    `json:"callCount"`
+}
+
+type DependenciesError struct {
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
+}
+
+type DependenciesResponse struct {
+	Data   []DependenciesData  `json:"data"`
+	Errors []DependenciesError `json:"errors"`
 }
 
 func convertEvents(events ptrace.SpanEventSlice) (times []time.Time, names, attrs []string, err error) {
@@ -690,4 +726,37 @@ func Trace(ctx context.Context, db *sql.DB, params TraceParams) (TraceResponse, 
 	}
 
 	return result, nil
+}
+
+type DependenciesParams struct {
+	EndTime  *time.Time
+	Lookback *time.Duration
+}
+
+func Dependencies(ctx context.Context, db *sql.DB, params DependenciesParams) ([]DependenciesData, error) {
+	rows, err := db.QueryContext(ctx, dependenciesSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]DependenciesData, 0)
+	for rows.Next() {
+		var result DependenciesData
+		if err := rows.Scan(
+			&result.ParentServiceName,
+			&result.ChildServiceName,
+			&result.Count,
+		); err != nil {
+			log.Fatal(err)
+		}
+
+		results = append(results, result)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	return results, nil
 }
