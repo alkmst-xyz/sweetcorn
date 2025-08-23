@@ -306,18 +306,27 @@ func (s WebService) jaegerTrace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := storage.Trace(s.ctx, s.db, params)
+	data, err := storage.Trace(s.ctx, s.db, params)
 
 	// TODO: use proper error responses
 	if err != nil {
+		io.WriteString(w, err.Error())
 		w.Header().Set("Content-Type", webDefaultContentType)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
+	response := storage.TracesResponse{
+		Data:   []storage.TraceResponse{data},
+		Errors: nil,
+		Limit:  0,
+		Offset: 0,
+		Total:  1,
+	}
+
 	w.Header().Set("Content-Type", webDefaultContentType)
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(result)
+	json.NewEncoder(w).Encode(&response)
 }
 
 func StartWebApp(ctx context.Context, db *sql.DB, addr string) error {
