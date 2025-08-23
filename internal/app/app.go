@@ -408,12 +408,32 @@ func StartWebApp(ctx context.Context, db *sql.DB, addr string) error {
 	mux.HandleFunc("GET /jaeger/api/traces/{traceID}", s.jaegerTrace)
 	mux.HandleFunc("GET /jaeger/api/dependencies", s.jaegerDependencies)
 
+	// grafana is hitting this endpoint somehow!!
+	mux.HandleFunc("GET /api/traces", s.jaegerSearchTraces)
+
 	server := &http.Server{
 		Addr:    addr,
-		Handler: cors.Default().Handler(mux),
+		Handler: cors.Default().Handler(loggingMiddleware(mux)),
 	}
 	log.Printf("Sweetcorn server listening on %s", addr)
 	err := server.ListenAndServe()
 
 	return err
+}
+
+// TODO: remove later, use proper logging lol
+// loggingMiddleware wraps an http.Handler and logs request info.
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		query := r.URL.Query()
+
+		log.Printf(
+			"Request: %s %s | Query: %v",
+			r.Method, path, query,
+		)
+
+		next.ServeHTTP(w, r)
+	})
 }
