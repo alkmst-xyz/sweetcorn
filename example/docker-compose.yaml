@@ -31,5 +31,18 @@ services:
     networks:
       - sweetcorn-net
 
+  hotrod:
+    image: jaegertracing/example-hotrod:1.72.0
+    ports:
+      - "8080:8080"
+      - "8083:8083"
+    command: ["all"]
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://sweetcorn:4318
+    depends_on:
+      - sweetcorn
+    networks:
+      - sweetcorn-net
+
 networks:
   sweetcorn-net:

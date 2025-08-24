@@ -2,6 +2,24 @@
 
 A DuckDB backend for OpenTelemetry data.
 
+> **CAUTION:** This project is currently in **pre-alpha**.
+
+## Quick start
+
+```bash
+cd example
+docker compose up -d
+```
+
+| Service      | URL                    |
+| ------------ | ---------------------- |
+| OTLP gRPC    | localhost:4317         |
+| OTLP HTTP    | http://localhost:4318  |
+| Sweetcorn UI | http://localhost:13579 |
+| ---          | ---                    |
+| Grafana      | http://localhost:3000  |
+| HotROD       | http://localhost:8080  |
+
 ## Features
 
 - [x] Logs
@@ -15,15 +33,15 @@ A DuckDB backend for OpenTelemetry data.
 - [x] Handle protobuf payload
 - [x] Handle JSON payload in HTTP
 - [ ] Docker Image
-- [ ] Exporter for open telemetry collector
-- [ ] Focus completely on DuckDB data types, OTEL -> database schema transformation, etc.
+- [ ] ~~Exporter for open telemetry collector~~: not planned for v0.1.0.
 - [ ] TTL for rows (duck db does not provide it)
   - Table specific TTL configuration
 - [ ] Refresh views periodically
   - This way the schemas will remain up to date
 - [ ] Add configuration parameters for DuckDB and add to `config.yaml`
-- [ ] Compression:
+- [ ] Explore compression:
   - DuckDB has built-in compression with lightweight compression algorithms.
+  - Validate compression is working.
 
 ### Development
 
