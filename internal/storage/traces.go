@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/marcboeker/go-duckdb/v2"
@@ -15,7 +16,7 @@ const (
 	createTracesTableSQL = `
 CREATE SEQUENCE IF NOT EXISTS otel_traces_id_seq;
 
-CREATE TABLE IF NOT EXISTS %s (
+CREATE TABLE IF NOT EXISTS otel_traces (
 	id						BIGINT PRIMARY KEY DEFAULT nextval ('otel_traces_id_seq'),
 	timestamp				TIMESTAMP_NS,
 	timestamp_time			TIMESTAMP_S GENERATED ALWAYS AS (CAST(Timestamp AS TIMESTAMP)),
@@ -42,7 +43,7 @@ CREATE TABLE IF NOT EXISTS %s (
 	links_attributes		JSON[]
 );`
 
-	insertTracesSQLTemplate = `INSERT INTO %s (
+	insertTracesSQL = `INSERT INTO otel_traces (
 	timestamp,
 	trace_id,
 	span_id,
@@ -67,7 +68,7 @@ CREATE TABLE IF NOT EXISTS %s (
 	links_attributes
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
-	queryTracesSQLTemplate = `SELECT
+	queryTracesSQL = `SELECT
 	timestamp,
 	trace_id,
 	span_id,
@@ -91,19 +92,112 @@ CREATE TABLE IF NOT EXISTS %s (
 	links_trace_states,
 	links_attributes
 FROM
-	%s
+	otel_traces
 ORDER BY
 	timestamp DESC
 LIMIT
 	100;
 `
+
+	queryServicesSQL = `
+SELECT DISTINCT
+    service_name
+FROM
+	otel_traces
+LIMIT
+	100;`
+
+	traceOperationsSQL = `
+SELECT DISTINCT
+    span_name
+FROM
+	otel_traces
+WHERE
+	(? IS NULL OR service_name = ?)
+	AND (? IS NULL OR span_kind = ?)
+LIMIT
+	100;`
+
+	// Note:
+	// When using `struct_pack`, match it to the name of the golang struct field.
+	// This is useful when we deserialize during query. See `GetTraces()`.
+	// TODO:
+	// - AND CAST(timestamp AS TIMESTAMP) >= NOW() - INTERVAL '1 hour'
+	// - AND (span_attributes->>'$."peer.service"') = 'telemetrygen-server'
+	tracesSQL = `
+SELECT
+	trace_id,
+	array_agg(
+		struct_pack(
+			"TraceID" := trace_id,
+			"SpanID" := span_id,
+			"OperationName" := span_name,
+			"StartTime" := epoch_us(timestamp),
+			"Duration" := duration // 1000,
+			"ParentName" := parent_span_id,
+			"SpanAttributes" := span_attributes,
+			"ScopeName" := scope_name,
+			"SpanKind" := span_kind
+		)
+	) as spans
+FROM
+	otel_traces
+WHERE
+	(? IS NULL OR service_name = ?)
+GROUP BY
+	trace_id
+LIMIT
+	100;`
+
+	traceSQL = `
+SELECT
+	trace_id,
+	array_agg(
+		struct_pack(
+			"TraceID" := trace_id,
+			"SpanID" := span_id,
+			"OperationName" := span_name,
+			"StartTime" := epoch_us(timestamp),
+			"Duration" := duration // 1000,
+			"ParentName" := parent_span_id,
+			"SpanAttributes" := span_attributes,
+			"ScopeName" := scope_name,
+			"SpanKind" := span_kind
+		)
+	) as spans
+FROM
+	otel_traces
+WHERE
+	trace_id = ?
+GROUP BY
+	trace_id;`
+
+	dependenciesSQL = `
+SELECT DISTINCT
+    (
+        SELECT
+            p.service_name
+        FROM
+            otel_traces AS p
+        WHERE
+            p.span_id = c.parent_span_id
+    ) AS parent_service_name,
+    c.service_name AS child_service_name,
+    COUNT(*) AS count
+FROM
+    otel_traces as c
+WHERE
+    c.parent_span_id != ''
+GROUP BY
+    parent_service_name,
+    child_service_name;`
 )
 
 type TraceRecord struct {
-	TimestampTime      time.Time        `json:"timestamp"`
-	TraceId            string           `json:"traceId"`
-	SpanId             string           `json:"spanId"`
-	ParentSpanId       string           `json:"parentSpanId"`
+	TimestampTime      int64            `json:"timestamp"`
+	TraceID            string           `json:"traceID"`
+	SpanID             string           `json:"spanID"`
+	ParentSpanID       string           `json:"parentSpanID"`
 	TraceState         string           `json:"traceState"`
 	SpanName           string           `json:"spanName"`
 	SpanKind           string           `json:"spanKind"`
@@ -118,10 +212,96 @@ type TraceRecord struct {
 	EventsTimestamps   []time.Time      `json:"eventsTimestamps"`
 	EventsNames        []string         `json:"eventsNames"`
 	EventsAttributes   []map[string]any `json:"eventsAttributes"`
-	LinksTraceIds      []string         `json:"linksTraceIds"`
-	LinksSpanIds       []string         `json:"linksSpanIds"`
+	LinksTraceIDs      []string         `json:"linksTraceIDs"`
+	LinksSpanIDs       []string         `json:"linksSpanIDs"`
 	LinksTraceStates   []string         `json:"linksTraceStates"`
 	LinksAttributes    []map[string]any `json:"linksAttributes"`
+}
+
+// Jaeger Query
+
+type ServicesResponse struct {
+	Data   []string `json:"data"`
+	Errors any      `json:"errors"`
+	Limit  int      `json:"limit"`
+	Offset int      `json:"offset"`
+	Total  int      `json:"total"`
+}
+
+type TraceKeyValuePair struct {
+	Key   string `json:"key"`
+	Type  string `json:"type"`
+	Value any    `json:"value"`
+}
+
+type TraceProcess struct {
+	ServiceName string              `json:"serviceName"`
+	Tags        []TraceKeyValuePair `json:"tags"`
+}
+
+type TraceSpanReference struct {
+	RefType string `json:"refType"`
+	SpanID  string `json:"spanID"`
+	TraceID string `json:"traceID"`
+}
+
+// Note: Millisecond epoch time
+type TraceLog struct {
+	Timestamp int64               `json:"timestamp"`
+	Fields    []TraceKeyValuePair `json:"fields"`
+	Name      string              `json:"name"`
+}
+
+// Note: Times are in microseconds
+type Span struct {
+	TraceID        string               `json:"traceID"`
+	SpanID         string               `json:"spanID"`
+	ProcessID      string               `json:"processID"`
+	OperationName  string               `json:"operationName"`
+	StartTime      int64                `json:"startTime"`
+	Duration       int64                `json:"duration"`
+	Logs           []TraceLog           `json:"logs"`
+	References     []TraceSpanReference `json:"references"`
+	Tags           []TraceKeyValuePair  `json:"tags"`
+	Warnings       []string             `json:"warnings"`
+	Flags          int                  `json:"flags"`
+	StackTraces    []string             `json:"stackTraces"`
+	ParentName     string               `json:"-"` // TODO: remove
+	SpanAttributes map[string]any       `json:"-"` // TODO: remove
+	ScopeName      string               `json:"-"` // TODO: remove
+	SpanKind       string               `json:"-"` // TODO: remove
+
+}
+
+type TraceResponse struct {
+	Processes map[string]TraceProcess `json:"processes"`
+	TraceID   string                  `json:"traceID"`
+	Warnings  []string                `json:"warnings"`
+	Spans     []Span                  `json:"spans"`
+}
+
+type TracesResponse struct {
+	Data   []TraceResponse `json:"data"`
+	Errors any             `json:"errors"`
+	Limit  int             `json:"limit"`
+	Offset int             `json:"offset"`
+	Total  int             `json:"total"`
+}
+
+type DependenciesData struct {
+	ParentServiceName string `json:"parent"`
+	ChildServiceName  string `json:"child"`
+	Count             int    `json:"callCount"`
+}
+
+type DependenciesError struct {
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
+}
+
+type DependenciesResponse struct {
+	Data   []DependenciesData  `json:"data"`
+	Errors []DependenciesError `json:"errors"`
 }
 
 func convertEvents(events ptrace.SpanEventSlice) (times []time.Time, names, attrs []string, err error) {
@@ -157,26 +337,14 @@ func convertLinks(links ptrace.SpanLinkSlice) (traceIDs, spanIDs, states, attrs 
 	return
 }
 
-func renderCreateTracesTableSQL(cfg *Config) string {
-	return fmt.Sprintf(createTracesTableSQL, cfg.TracesTableName)
-}
-
 func CreateTracesTable(ctx context.Context, cfg *Config, db *sql.DB) error {
-	if _, err := db.ExecContext(ctx, renderCreateTracesTableSQL(cfg)); err != nil {
+	if _, err := db.ExecContext(ctx, createTracesTableSQL); err != nil {
 		return fmt.Errorf("exec create traces table sql: %w", err)
 	}
 	return nil
 }
 
-func RenderInsertTracesSQL(cfg *Config) string {
-	return fmt.Sprintf(insertTracesSQLTemplate, cfg.TracesTableName)
-}
-
-func RenderQueryTracesSQL(cfg *Config) string {
-	return fmt.Sprintf(queryTracesSQLTemplate, cfg.TracesTableName)
-}
-
-func InsertTracesData(ctx context.Context, db *sql.DB, insertSQL string, td ptrace.Traces) error {
+func InsertTracesData(ctx context.Context, db *sql.DB, td ptrace.Traces) error {
 	rsSpans := td.ResourceSpans()
 
 	for i := range rsSpans.Len() {
@@ -218,7 +386,7 @@ func InsertTracesData(ctx context.Context, db *sql.DB, insertSQL string, td ptra
 					return fmt.Errorf("failed to convert json trace links: %w", linksErr)
 				}
 
-				_, err := db.ExecContext(ctx, insertSQL,
+				_, err := db.ExecContext(ctx, insertTracesSQL,
 					span.StartTimestamp().AsTime(),
 					span.TraceID().String(),
 					span.SpanID().String(),
@@ -252,8 +420,8 @@ func InsertTracesData(ctx context.Context, db *sql.DB, insertSQL string, td ptra
 	return nil
 }
 
-func QueryTraces(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]TraceRecord, error) {
-	rows, err := db.QueryContext(ctx, queryLogsSQL)
+func QueryTraces(ctx context.Context, db *sql.DB) ([]TraceRecord, error) {
+	rows, err := db.QueryContext(ctx, queryTracesSQL)
 	if err != nil {
 		return nil, err
 	}
@@ -273,11 +441,14 @@ func QueryTraces(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]TraceR
 		var linksTraceStates duckdb.Composite[[]string]
 		var linksAttributes duckdb.Composite[[]map[string]any]
 
+		var timestamp time.Time
+		var duration uint64
+
 		err := rows.Scan(
-			&result.TimestampTime,
-			&result.TraceId,
-			&result.SpanId,
-			&result.ParentSpanId,
+			&timestamp,
+			&result.TraceID,
+			&result.SpanID,
+			&result.ParentSpanID,
 			&result.TraceState,
 			&result.SpanName,
 			&result.SpanKind,
@@ -286,7 +457,7 @@ func QueryTraces(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]TraceR
 			&result.ScopeName,
 			&result.ScopeVersion,
 			&result.SpanAttributes,
-			&result.Duration,
+			&duration,
 			&result.StatusCode,
 			&result.StatusMessage,
 			&eventsTimestamps,
@@ -306,12 +477,285 @@ func QueryTraces(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]TraceR
 		result.EventsNames = eventsNames.Get()
 		result.EventsAttributes = eventsAttributes.Get()
 
-		result.LinksTraceIds = linksTraceIds.Get()
-		result.LinksSpanIds = linksSpanIds.Get()
+		result.LinksTraceIDs = linksTraceIds.Get()
+		result.LinksSpanIDs = linksSpanIds.Get()
 		result.LinksTraceStates = linksTraceStates.Get()
 		result.LinksAttributes = linksAttributes.Get()
 
+		// convert nanoseconds to milliseconds
+		result.Duration = duration / 1000
+
+		// convert timestamp to unix epoch in microseconds
+		result.TimestampTime = timestamp.UnixMicro()
+
 		results = append(results, result)
+	}
+
+	return results, nil
+}
+
+func GetDistinctServices(ctx context.Context, db *sql.DB) ([]string, error) {
+	rows, err := db.QueryContext(ctx, queryServicesSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]string, 0)
+	for rows.Next() {
+		var result string
+		if err := rows.Scan(&result); err != nil {
+			log.Fatal(err)
+		}
+
+		results = append(results, result)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	return results, nil
+}
+
+type TraceOperationsParams struct {
+	ServiceName *string
+	SpanKind    *string
+}
+
+func TraceOperations(ctx context.Context, db *sql.DB, params TraceOperationsParams) ([]string, error) {
+	rows, err := db.QueryContext(ctx, traceOperationsSQL,
+		params.ServiceName,
+		params.ServiceName,
+		params.SpanKind,
+		params.SpanKind,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]string, 0)
+	for rows.Next() {
+		var result string
+		if err := rows.Scan(&result); err != nil {
+			log.Fatal(err)
+		}
+
+		results = append(results, result)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	return results, nil
+}
+
+type SearchTracesParams struct {
+	ServiceName   *string
+	OperationName *string
+	Tags          *map[string]string
+	StartTimeMin  *time.Time
+	StartTimeMax  *time.Time
+	DurationMin   *time.Duration
+	DurationMax   *time.Duration
+	NumTraces     *int
+}
+
+func SearchTraces(ctx context.Context, db *sql.DB, params SearchTracesParams) ([]TraceResponse, error) {
+	rows, err := db.QueryContext(ctx, tracesSQL,
+		params.ServiceName,
+		params.ServiceName,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]TraceResponse, 0)
+	for rows.Next() {
+		var result TraceResponse
+		var spans duckdb.Composite[[]Span]
+
+		err := rows.Scan(
+			&result.TraceID,
+			&spans,
+		)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// processes
+		// TODO: hardcoded
+		result.Processes = make(map[string]TraceProcess)
+		result.Processes["p1"] = TraceProcess{
+			ServiceName: "telemetrygen",
+			Tags:        []TraceKeyValuePair{},
+		}
+
+		// spans
+		spansRaw := spans.Get()
+		for i := range len(spansRaw) {
+			span := spansRaw[i]
+
+			span.Logs = make([]TraceLog, 0)
+			span.References = make([]TraceSpanReference, 0)
+			span.Tags = make([]TraceKeyValuePair, 0)
+			span.StackTraces = make([]string, 0)
+
+			// TODO: hardcoded
+			span.ProcessID = "p1"
+
+			if span.ParentName != "" {
+				reference := TraceSpanReference{
+					RefType: "CHILD_OF",
+					TraceID: result.TraceID,
+					SpanID:  span.ParentName,
+				}
+				span.References = append(span.References, reference)
+			}
+
+			// tags
+			span.Tags = make([]TraceKeyValuePair, 0)
+			for key, value := range span.SpanAttributes {
+				span.Tags = append(span.Tags, TraceKeyValuePair{
+					Key:   key,
+					Type:  "string",
+					Value: value,
+				})
+			}
+			span.Tags = append(span.Tags, TraceKeyValuePair{
+				Key:   "otel.scope.name",
+				Type:  "string",
+				Value: span.ScopeName,
+			})
+			span.Tags = append(span.Tags, TraceKeyValuePair{
+				Key:   "span.kind",
+				Type:  "string",
+				Value: span.SpanKind,
+			})
+
+			result.Spans = append(result.Spans, span)
+		}
+
+		results = append(results, result)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	return results, nil
+}
+
+type TraceParams struct {
+	TraceID   string
+	StartTime *time.Time
+	EndTime   *time.Time
+}
+
+func Trace(ctx context.Context, db *sql.DB, params TraceParams) (TraceResponse, error) {
+	row := db.QueryRowContext(ctx, traceSQL, params.TraceID)
+
+	var result TraceResponse
+	var spans duckdb.Composite[[]Span]
+
+	err := row.Scan(
+		&result.TraceID,
+		&spans,
+	)
+	if err == sql.ErrNoRows {
+		return result, fmt.Errorf("no trace found with id: %s", params.TraceID)
+	}
+	if err != nil {
+		return result, err
+	}
+
+	// processes
+	// TODO: hardcoded
+	result.Processes = make(map[string]TraceProcess)
+	result.Processes["p1"] = TraceProcess{
+		ServiceName: "telemetrygen",
+		Tags:        []TraceKeyValuePair{},
+	}
+
+	spansRaw := spans.Get()
+	for i := range len(spansRaw) {
+		span := spansRaw[i]
+
+		span.Logs = make([]TraceLog, 0)
+		span.References = make([]TraceSpanReference, 0)
+		span.Tags = make([]TraceKeyValuePair, 0)
+		span.StackTraces = make([]string, 0)
+
+		// TODO: hardcoded
+		span.ProcessID = "p1"
+
+		if span.ParentName != "" {
+			reference := TraceSpanReference{
+				RefType: "CHILD_OF",
+				TraceID: result.TraceID,
+				SpanID:  span.ParentName,
+			}
+			span.References = append(span.References, reference)
+		}
+
+		// tags
+		span.Tags = make([]TraceKeyValuePair, 0)
+		for key, value := range span.SpanAttributes {
+			span.Tags = append(span.Tags, TraceKeyValuePair{
+				Key:   key,
+				Type:  "string",
+				Value: value,
+			})
+		}
+		span.Tags = append(span.Tags, TraceKeyValuePair{
+			Key:   "otel.scope.name",
+			Type:  "string",
+			Value: span.ScopeName,
+		})
+		span.Tags = append(span.Tags, TraceKeyValuePair{
+			Key:   "span.kind",
+			Type:  "string",
+			Value: span.SpanKind,
+		})
+
+		result.Spans = append(result.Spans, span)
+	}
+
+	return result, nil
+}
+
+type DependenciesParams struct {
+	EndTime  *time.Time
+	Lookback *time.Duration
+}
+
+func Dependencies(ctx context.Context, db *sql.DB, params DependenciesParams) ([]DependenciesData, error) {
+	rows, err := db.QueryContext(ctx, dependenciesSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]DependenciesData, 0)
+	for rows.Next() {
+		var result DependenciesData
+		if err := rows.Scan(
+			&result.ParentServiceName,
+			&result.ChildServiceName,
+			&result.Count,
+		); err != nil {
+			log.Fatal(err)
+		}
+
+		results = append(results, result)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
 	}
 
 	return results, nil

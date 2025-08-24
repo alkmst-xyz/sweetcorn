@@ -14,7 +14,7 @@ const (
 	createLogsTableSQL = `
 CREATE SEQUENCE IF NOT EXISTS otel_logs_id_seq;
 
-CREATE TABLE IF NOT EXISTS %s (
+CREATE TABLE IF NOT EXISTS otel_logs (
 	id						BIGINT PRIMARY KEY DEFAULT nextval ('otel_logs_id_seq'),
 	timestamp				TIMESTAMP_NS,
 	timestamp_time			TIMESTAMP_S GENERATED ALWAYS AS (CAST(Timestamp AS TIMESTAMP)),
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS %s (
 	log_attributes			JSON
 );`
 
-	insertLogsSQLTemplate = `INSERT INTO %s (
+	insertLogsSQL = `INSERT INTO otel_logs (
 	timestamp,
 	trace_id,
 	span_id,
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS %s (
 	log_attributes
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
-	queryLogsSQLTemplate = `SELECT
+	queryLogsSQL = `SELECT
 	timestamp,
 	trace_id,
 	span_id,
@@ -69,25 +69,13 @@ CREATE TABLE IF NOT EXISTS %s (
 	scope_attributes,
 	log_attributes
 FROM
-	%s
+	otel_logs
 ORDER BY
 	timestamp DESC
 LIMIT
 	100;
 `
 )
-
-func renderCreateLogsTableSQL(cfg *Config) string {
-	return fmt.Sprintf(createLogsTableSQL, cfg.LogsTableName)
-}
-
-func RenderInsertLogsSQL(cfg *Config) string {
-	return fmt.Sprintf(insertLogsSQLTemplate, cfg.LogsTableName)
-}
-
-func RenderQueryLogsSQL(cfg *Config) string {
-	return fmt.Sprintf(queryLogsSQLTemplate, cfg.LogsTableName)
-}
 
 type LogRecord struct {
 	Timestamp          time.Time      `json:"timestamp"`
@@ -108,13 +96,13 @@ type LogRecord struct {
 }
 
 func CreateLogsTable(ctx context.Context, cfg *Config, db *sql.DB) error {
-	if _, err := db.ExecContext(ctx, renderCreateLogsTableSQL(cfg)); err != nil {
+	if _, err := db.ExecContext(ctx, createLogsTableSQL); err != nil {
 		return fmt.Errorf("exec create logs table sql: %w", err)
 	}
 	return nil
 }
 
-func QueryLogs(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]LogRecord, error) {
+func QueryLogs(ctx context.Context, db *sql.DB) ([]LogRecord, error) {
 	rows, err := db.QueryContext(ctx, queryLogsSQL)
 	if err != nil {
 		return nil, err
@@ -153,7 +141,7 @@ func QueryLogs(ctx context.Context, db *sql.DB, queryLogsSQL string) ([]LogRecor
 	return results, nil
 }
 
-func InsertLogsData(ctx context.Context, db *sql.DB, insertSQL string, ld plog.Logs) error {
+func InsertLogsData(ctx context.Context, db *sql.DB, ld plog.Logs) error {
 	rsLogs := ld.ResourceLogs()
 
 	for i := range rsLogs.Len() {
@@ -194,7 +182,7 @@ func InsertLogsData(ctx context.Context, db *sql.DB, insertSQL string, ld plog.L
 					timestamp = r.ObservedTimestamp()
 				}
 
-				_, err := db.ExecContext(ctx, insertSQL,
+				_, err := db.ExecContext(ctx, insertLogsSQL,
 					timestamp.AsTime(),
 					r.TraceID().String(),
 					r.SpanID().String(),

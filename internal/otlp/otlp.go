@@ -43,9 +43,8 @@ func GetStatusFromError(err error) error {
 
 type LogsGRPCService struct {
 	plogotlp.UnimplementedGRPCServer
-	ctx           context.Context
-	db            *sql.DB
-	insertLogsSQL string
+	ctx context.Context
+	db  *sql.DB
 }
 
 func (r *LogsGRPCService) Export(ctx context.Context, req plogotlp.ExportRequest) (plogotlp.ExportResponse, error) {
@@ -55,7 +54,7 @@ func (r *LogsGRPCService) Export(ctx context.Context, req plogotlp.ExportRequest
 		return plogotlp.NewExportResponse(), nil
 	}
 
-	err := storage.InsertLogsData(r.ctx, r.db, r.insertLogsSQL, ld)
+	err := storage.InsertLogsData(r.ctx, r.db, ld)
 	if err != nil {
 		log.Fatalf("Failed to write logs to db: %v", err)
 		return plogotlp.NewExportResponse(), GetStatusFromError(err)
@@ -70,9 +69,8 @@ func (r *LogsGRPCService) Export(ctx context.Context, req plogotlp.ExportRequest
 
 type TracesGRPCService struct {
 	ptraceotlp.UnimplementedGRPCServer
-	ctx             context.Context
-	db              *sql.DB
-	insertTracesSQL string
+	ctx context.Context
+	db  *sql.DB
 }
 
 func (r *TracesGRPCService) Export(ctx context.Context, req ptraceotlp.ExportRequest) (ptraceotlp.ExportResponse, error) {
@@ -82,7 +80,7 @@ func (r *TracesGRPCService) Export(ctx context.Context, req ptraceotlp.ExportReq
 		return ptraceotlp.NewExportResponse(), nil
 	}
 
-	err := storage.InsertTracesData(r.ctx, r.db, r.insertTracesSQL, td)
+	err := storage.InsertTracesData(r.ctx, r.db, td)
 	if err != nil {
 		log.Fatalf("Failed to write traces to db: %v", err)
 		return ptraceotlp.NewExportResponse(), GetStatusFromError(err)
@@ -95,16 +93,14 @@ func (r *TracesGRPCService) Export(ctx context.Context, req ptraceotlp.ExportReq
 // Main
 //
 
-func StartGRPCServer(ctx context.Context, db *sql.DB, insertLogsSQL string, insertTracesSQL string, addr string) error {
+func StartGRPCServer(ctx context.Context, db *sql.DB, addr string) error {
 	logsService := &LogsGRPCService{
-		ctx:           ctx,
-		db:            db,
-		insertLogsSQL: insertLogsSQL,
+		ctx: ctx,
+		db:  db,
 	}
 	tracesService := &TracesGRPCService{
-		ctx:             ctx,
-		db:              db,
-		insertTracesSQL: insertTracesSQL,
+		ctx: ctx,
+		db:  db,
 	}
 
 	lis, err := net.Listen("tcp", addr)

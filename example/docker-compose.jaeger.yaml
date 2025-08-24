@@ -1,0 +1,27 @@
+services:
+  jaeger:
+    image: cr.jaegertracing.io/jaegertracing/jaeger:2.9.0
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+    environment:
+      - LOG_LEVEL=debug
+    networks:
+      - jaeger-net
+
+  hotrod:
+    image: jaegertracing/example-hotrod:1.72.0
+    ports:
+      - "8080:8080"
+      - "8083:8083"
+    command: ["all"]
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+    networks:
+      - jaeger-net
+    depends_on:
+      - jaeger
+
+networks:
+  jaeger-net:

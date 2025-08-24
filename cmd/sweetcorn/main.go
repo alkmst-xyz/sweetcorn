@@ -16,9 +16,7 @@ import (
 
 func main() {
 	cfg := &storage.Config{
-		DataSourceName:  ".sweetcorn_data/storage.db",
-		LogsTableName:   "otel_logs",
-		TracesTableName: "otel_traces",
+		DataSourceName: ".sweetcorn_data/storage.db",
 	}
 
 	// create data dir
@@ -43,26 +41,21 @@ func main() {
 		log.Fatalf("Failed to create traces table: %v", err)
 	}
 
-	insertLogsSQL := storage.RenderInsertLogsSQL(cfg)
-	insertTracesSQL := storage.RenderInsertTracesSQL(cfg)
-	queryLogsSQL := storage.RenderQueryLogsSQL(cfg)
-	queryTracesSQL := storage.RenderQueryTracesSQL(cfg)
-
 	// start servers
 	const httpAddr = ":4318"
 	const grpcAddr = ":4317"
-	const appAddr = ":3000"
+	const appAddr = ":13579"
 
 	g, ctx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		return otlphttp.StartHTTPServer(ctx, db, insertLogsSQL, insertTracesSQL, httpAddr)
+		return otlphttp.StartHTTPServer(ctx, db, httpAddr)
 	})
 	g.Go(func() error {
-		return otlp.StartGRPCServer(ctx, db, insertLogsSQL, insertTracesSQL, grpcAddr)
+		return otlp.StartGRPCServer(ctx, db, grpcAddr)
 	})
 	g.Go(func() error {
-		return app.StartWebApp(ctx, db, queryLogsSQL, queryTracesSQL, appAddr)
+		return app.StartWebApp(ctx, db, appAddr)
 	})
 
 	if err := g.Wait(); err != nil {

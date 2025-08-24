@@ -1,0 +1,19 @@
+name: sweetcorn-example
+
+services:
+  grafana:
+    image: grafana/grafana:12.1.1
+    restart: on-failure
+    command:
+      - --config=/etc/grafana-config/grafana.ini
+    volumes:
+      - ./grafana:/etc/grafana-config
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/healthz"]
+      interval: 1s
+      timeout: 10s
+      retries: 5
+      start_period: 0s
+      start_interval: 0s

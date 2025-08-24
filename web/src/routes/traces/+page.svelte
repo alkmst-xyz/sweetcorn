@@ -20,41 +20,69 @@
 <section>
 	<h1 class="mb-4 font-semibold">Traces</h1>
 
+	<div>
+		<h2>Services</h2>
+		<p>Total: {data.services.total}</p>
+		<div>
+			<ul>
+				{#each data.services.data as item}
+					<li>
+						{item}
+					</li>
+				{/each}
+			</ul>
+		</div>
+	</div>
+
+	<div>
+		<h2>Operations</h2>
+		<p>Total: {data.operations.total}</p>
+		<div>
+			<ul>
+				{#each data.operations.data as item}
+					<li>
+						{item}
+					</li>
+				{/each}
+			</ul>
+		</div>
+	</div>
+
 	<div class="mb-4 overflow-auto border">
 		<Datatable basic {table}>
 			<table>
 				<thead>
 					<tr>
 						<ThSort {table} field="timestamp">Timestamp</ThSort>
-						<ThSort {table} field="traceId">Trace ID</ThSort>
-						<ThSort {table} field="spanId">Span ID</ThSort>
-						<ThSort {table} field="parentSpanId">Parent Span ID</ThSort>
+						<ThSort {table} field="traceID">Trace ID</ThSort>
+						<ThSort {table} field="spanID">Span ID</ThSort>
+						<ThSort {table} field="parentSpanID">Parent Span ID</ThSort>
 						<ThSort {table} field="traceState">Trace State</ThSort>
 						<ThSort {table} field="spanName">Span Name</ThSort>
 						<ThSort {table} field="spanKind">Span Kind</ThSort>
 						<ThSort {table} field="serviceName">Service Name</ThSort>
-						<ThSort {table} field="resourceAttributes"
-							>Resource Attributes</ThSort
-						>
+						<ThSort {table} field="resourceAttributes">
+							Resource Attributes
+						</ThSort>
 						<ThSort {table} field="scopeName">Scope Name</ThSort>
 						<ThSort {table} field="scopeVersion">Scope Version</ThSort>
 						<ThSort {table} field="spanAttributes">Span Attributes</ThSort>
-						<ThSort {table} field="duration">Duration</ThSort>
+						<ThSort {table} field="duration">Duration (μs)</ThSort>
 						<ThSort {table} field="statusCode">Status Code</ThSort>
 						<ThSort {table} field="statusMessage">Status Message</ThSort>
 						<ThSort {table} field="eventsTimestamps">Events Timestamps</ThSort>
 						<ThSort {table} field="eventsNames">Events Names</ThSort>
 						<ThSort {table} field="eventsAttributes">Events Attributes</ThSort>
-						<ThSort {table} field="linksTraceIds">Links Trace IDs</ThSort>
-						<ThSort {table} field="linksSpanIds">Links Span IDs</ThSort>
+						<ThSort {table} field="linksTraceIDs">Links Trace IDs</ThSort>
+						<ThSort {table} field="linksSpanIDs">Links Span IDs</ThSort>
 						<ThSort {table} field="linksTraceStates">Links Trace States</ThSort>
 						<ThSort {table} field="linksAttributes">Links Attributes</ThSort>
 					</tr>
 					<tr>
 						<ThFilter {table} field="timestamp" />
-						<ThFilter {table} field="traceId" />
-						<ThFilter {table} field="spanId" />
-						<ThFilter {table} field="parentSpanId" />
+						<ThFilter {table} field="traceID" />
+						<ThFilter {table} field="spanID" />
+						<ThFilter {table} field="parentSpanID" />
 						<ThFilter {table} field="traceState" />
 						<ThFilter {table} field="spanName" />
 						<ThFilter {table} field="spanKind" />
@@ -69,8 +97,8 @@
 						<ThFilter {table} field="eventsTimestamps" />
 						<ThFilter {table} field="eventsNames" />
 						<ThFilter {table} field="eventsAttributes" />
-						<ThFilter {table} field="linksTraceIds" />
-						<ThFilter {table} field="linksSpanIds" />
+						<ThFilter {table} field="linksTraceIDs" />
+						<ThFilter {table} field="linksSpanIDs" />
 						<ThFilter {table} field="linksTraceStates" />
 						<ThFilter {table} field="linksAttributes" />
 					</tr>
@@ -79,9 +107,9 @@
 					{#each table.rows as row}
 						<tr>
 							<td>{row.timestamp}</td>
-							<td>{row.traceId}</td>
-							<td>{row.spanId}</td>
-							<td>{row.parentSpanId}</td>
+							<td>{row.traceID}</td>
+							<td>{row.spanID}</td>
+							<td>{row.parentSpanID}</td>
 							<td>{row.traceState}</td>
 							<td>{row.spanName}</td>
 							<td>{row.spanKind}</td>
@@ -107,10 +135,10 @@
 								{JSON.stringify(row.eventsAttributes)}
 							</td>
 							<td>
-								{JSON.stringify(row.linksTraceIds)}
+								{JSON.stringify(row.linksTraceIDs)}
 							</td>
 							<td>
-								{JSON.stringify(row.linksSpanIds)}
+								{JSON.stringify(row.linksSpanIDs)}
 							</td>
 							<td>
 								{JSON.stringify(row.linksTraceStates)}

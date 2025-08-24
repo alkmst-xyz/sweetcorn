@@ -15,5 +15,5 @@
 		{@render children()}
 	</main>
 
-	<Footer statusData={data} />
+	<Footer statusData={data.healthz} />
 </div>
