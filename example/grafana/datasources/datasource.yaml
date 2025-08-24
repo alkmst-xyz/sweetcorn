@@ -1,0 +1,10 @@
+apiVersion: 1
+
+datasources:
+  - name: Sweetcorn
+    type: jaeger
+    access: proxy
+    orgId: 1
+    url: http://sweetcorn:13579/jaeger
+    basicAuth: false
+    isDefault: false

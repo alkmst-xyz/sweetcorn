@@ -1,6 +1,16 @@
 name: sweetcorn-example
 
 services:
+  sweetcorn:
+    build:
+      context: ..
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "13579:13579"
+    networks:
+      - sweetcorn-net
+
   grafana:
     image: grafana/grafana:12.1.1
     restart: on-failure
@@ -8,6 +18,7 @@ services:
       - --config=/etc/grafana-config/grafana.ini
     volumes:
       - ./grafana:/etc/grafana-config
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
     ports:
       - "3000:3000"
     healthcheck:
@@ -17,3 +28,8 @@ services:
       retries: 5
       start_period: 0s
       start_interval: 0s
+    networks:
+      - sweetcorn-net
+
+networks:
+  sweetcorn-net:
