@@ -16,7 +16,7 @@ import (
 
 func main() {
 	cfg := &storage.Config{
-		DataSourceName: ".sweetcorn_data/storage.db",
+		DataSourceName: ".sweetcorn_data/main.db",
 	}
 
 	// create data dir
