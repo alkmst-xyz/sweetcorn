@@ -4,7 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"io"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -30,6 +31,20 @@ const (
 type WebService struct {
 	ctx context.Context
 	db  *sql.DB
+}
+
+type jaegerResponse struct {
+	Data   any           `json:"data"`
+	Total  int           `json:"total"`
+	Limit  int           `json:"limit"`
+	Offset int           `json:"offset"`
+	Errors []jaegerError `json:"errors"`
+}
+
+type jaegerError struct {
+	Code    int    `json:"code,omitempty"`
+	Msg     string `json:"msg"`
+	TraceID string `json:"traceID,omitempty"`
 }
 
 func (s WebService) getHealthzHandler(w http.ResponseWriter, r *http.Request) {
@@ -65,24 +80,17 @@ func (s WebService) getTracesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s WebService) jaegerServices(w http.ResponseWriter, r *http.Request) {
-	services, err := storage.GetDistinctServices(s.ctx, s.db)
-	if err != nil {
-		w.Header().Set("Content-Type", webDefaultContentType)
-		w.WriteHeader(http.StatusInternalServerError)
+	data, err := storage.GetServices(s.ctx, s.db)
+	if jaegerHandleError(w, err, http.StatusInternalServerError) {
 		return
 	}
 
-	response := &storage.ServicesResponse{
-		Data:   services,
-		Errors: nil,
-		Limit:  0,
-		Offset: 0,
-		Total:  len(services),
+	resp := jaegerResponse{
+		Data:  data,
+		Total: len(data),
 	}
 
-	w.Header().Set("Content-Type", webDefaultContentType)
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	jaegerWriteResponse(w, &resp)
 }
 
 func parseTraceOperationsParams(r *http.Request) storage.TraceOperationsParams {
@@ -107,23 +115,16 @@ func (s WebService) jaegerOperations(w http.ResponseWriter, r *http.Request) {
 	params := parseTraceOperationsParams(r)
 
 	data, err := storage.TraceOperations(s.ctx, s.db, params)
-	if err != nil {
-		w.Header().Set("Content-Type", webDefaultContentType)
-		w.WriteHeader(http.StatusInternalServerError)
+	if jaegerHandleError(w, err, http.StatusInternalServerError) {
 		return
 	}
 
-	response := &storage.ServicesResponse{
-		Data:   data,
-		Errors: nil,
-		Limit:  0,
-		Offset: 0,
-		Total:  len(data),
+	resp := jaegerResponse{
+		Data:  data,
+		Total: len(data),
 	}
 
-	w.Header().Set("Content-Type", webDefaultContentType)
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	jaegerWriteResponse(w, &resp)
 }
 
 func (s WebService) jaegerOperationsLegacy(w http.ResponseWriter, r *http.Request) {
@@ -137,23 +138,16 @@ func (s WebService) jaegerOperationsLegacy(w http.ResponseWriter, r *http.Reques
 	}
 
 	data, err := storage.TraceOperations(s.ctx, s.db, params)
-	if err != nil {
-		w.Header().Set("Content-Type", webDefaultContentType)
-		w.WriteHeader(http.StatusInternalServerError)
+	if jaegerHandleError(w, err, http.StatusInternalServerError) {
 		return
 	}
 
-	response := &storage.ServicesResponse{
-		Data:   data,
-		Errors: nil,
-		Limit:  0,
-		Offset: 0,
-		Total:  len(data),
+	resp := jaegerResponse{
+		Data:  data,
+		Total: len(data),
 	}
 
-	w.Header().Set("Content-Type", webDefaultContentType)
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	jaegerWriteResponse(w, &resp)
 }
 
 func parseSearchTracesParams(r *http.Request) (storage.SearchTracesParams, bool) {
@@ -204,24 +198,16 @@ func (s WebService) jaegerSearchTraces(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data, err := storage.SearchTraces(s.ctx, s.db, params)
-	if err != nil {
-		io.WriteString(w, err.Error())
-		w.Header().Set("Content-Type", webDefaultContentType)
-		w.WriteHeader(http.StatusInternalServerError)
+	if jaegerHandleError(w, err, http.StatusInternalServerError) {
 		return
 	}
 
-	response := &storage.TracesResponse{
-		Data:   data,
-		Errors: nil,
-		Limit:  0,
-		Offset: 0,
-		Total:  len(data),
+	resp := jaegerResponse{
+		Data:  data,
+		Total: len(data),
 	}
 
-	w.Header().Set("Content-Type", webDefaultContentType)
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	jaegerWriteResponse(w, &resp)
 }
 
 const (
@@ -308,25 +294,21 @@ func (s WebService) jaegerTrace(w http.ResponseWriter, r *http.Request) {
 
 	data, err := storage.Trace(s.ctx, s.db, params)
 
-	// TODO: use proper error responses
-	if err != nil {
-		io.WriteString(w, err.Error())
-		w.Header().Set("Content-Type", webDefaultContentType)
-		w.WriteHeader(http.StatusInternalServerError)
+	if errors.Is(err, storage.ErrTraceNotFound) {
+		jaegerHandleError(w, err, http.StatusNotFound)
 		return
 	}
 
-	response := storage.TracesResponse{
-		Data:   []storage.TraceResponse{data},
-		Errors: nil,
-		Limit:  0,
-		Offset: 0,
-		Total:  1,
+	if jaegerHandleError(w, err, http.StatusInternalServerError) {
+		return
 	}
 
-	w.Header().Set("Content-Type", webDefaultContentType)
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(&response)
+	resp := jaegerResponse{
+		Data:  []storage.TraceResponse{data},
+		Total: 1,
+	}
+
+	jaegerWriteResponse(w, &resp)
 }
 
 func parseDependenciesParams(r *http.Request) (storage.DependenciesParams, bool) {
@@ -358,23 +340,15 @@ func (s WebService) jaegerDependencies(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data, err := storage.Dependencies(s.ctx, s.db, params)
-
-	// TODO: use proper error responses
-	if err != nil {
-		io.WriteString(w, err.Error())
-		w.Header().Set("Content-Type", webDefaultContentType)
-		w.WriteHeader(http.StatusInternalServerError)
+	if jaegerHandleError(w, err, http.StatusInternalServerError) {
 		return
 	}
 
-	response := storage.DependenciesResponse{
-		Data:   data,
-		Errors: nil,
+	resp := jaegerResponse{
+		Data: data,
 	}
 
-	w.Header().Set("Content-Type", webDefaultContentType)
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(&response)
+	jaegerWriteResponse(w, &resp)
 }
 
 func StartWebApp(ctx context.Context, db *sql.DB, addr string) error {
@@ -436,4 +410,44 @@ func loggingMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func jaegerHandleError(w http.ResponseWriter, err error, code int) bool {
+	if err == nil {
+		return false
+	}
+
+	if code == http.StatusInternalServerError {
+		log.Panicf("Error: HTTP handler, Internal Server Error: %v", err)
+	}
+
+	h := w.Header()
+	h.Set("Content-Type", webDefaultContentType)
+	h.Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(code)
+
+	response := &jaegerResponse{
+		Errors: []jaegerError{
+			{
+				Code: code,
+				Msg:  err.Error(),
+			},
+		},
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Panicf("Error: failed writing HTTP error response: %v", err)
+	}
+
+	return true
+}
+
+func jaegerWriteResponse(w http.ResponseWriter, response any) {
+	w.Header().Set("Content-Type", webDefaultContentType)
+	w.WriteHeader(http.StatusOK)
+
+	err := json.NewEncoder(w).Encode(response)
+	if err != nil {
+		jaegerHandleError(w, fmt.Errorf("failed writing HTTP response: %w", err), http.StatusInternalServerError)
+	}
 }

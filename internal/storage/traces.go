@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -221,14 +222,6 @@ type TraceRecord struct {
 
 // Jaeger Query
 
-type ServicesResponse struct {
-	Data   []string `json:"data"`
-	Errors any      `json:"errors"`
-	Limit  int      `json:"limit"`
-	Offset int      `json:"offset"`
-	Total  int      `json:"total"`
-}
-
 type TraceKeyValuePair struct {
 	Key   string `json:"key"`
 	Type  string `json:"type"`
@@ -281,29 +274,13 @@ type TraceResponse struct {
 	Spans     []Span                  `json:"spans"`
 }
 
-type TracesResponse struct {
-	Data   []TraceResponse `json:"data"`
-	Errors any             `json:"errors"`
-	Limit  int             `json:"limit"`
-	Offset int             `json:"offset"`
-	Total  int             `json:"total"`
-}
-
 type DependenciesData struct {
 	ParentServiceName string `json:"parent"`
 	ChildServiceName  string `json:"child"`
 	Count             int    `json:"callCount"`
 }
 
-type DependenciesError struct {
-	Code int    `json:"code"`
-	Msg  string `json:"msg"`
-}
-
-type DependenciesResponse struct {
-	Data   []DependenciesData  `json:"data"`
-	Errors []DependenciesError `json:"errors"`
-}
+var ErrTraceNotFound = errors.New("trace not found")
 
 func convertEvents(events ptrace.SpanEventSlice) (times []time.Time, names, attrs []string, err error) {
 	for i := 0; i < events.Len(); i++ {
@@ -495,7 +472,7 @@ func QueryTraces(ctx context.Context, db *sql.DB) ([]TraceRecord, error) {
 	return results, nil
 }
 
-func GetDistinctServices(ctx context.Context, db *sql.DB) ([]string, error) {
+func GetServices(ctx context.Context, db *sql.DB) ([]string, error) {
 	rows, err := db.QueryContext(ctx, queryServicesSQL)
 	if err != nil {
 		return nil, err
@@ -668,7 +645,7 @@ func Trace(ctx context.Context, db *sql.DB, params TraceParams) (TraceResponse, 
 		&spans,
 	)
 	if err == sql.ErrNoRows {
-		return result, fmt.Errorf("no trace found with id: %s", params.TraceID)
+		return result, ErrTraceNotFound
 	}
 	if err != nil {
 		return result, err
