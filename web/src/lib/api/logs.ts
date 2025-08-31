@@ -2,7 +2,7 @@ import type { FetchType } from './types';
 import { API_BASE } from './utils';
 
 export type LogRecord = {
-	timestamp: number;
+	timestamp: string;
 	traceId: string;
 	spanId: string;
 	traceFlags: number;
