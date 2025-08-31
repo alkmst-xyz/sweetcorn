@@ -1,0 +1,55 @@
+name: sweetcorn-ducklake
+
+services:
+  sweetcorn:
+    build:
+      context: ../..
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "13579:13579"
+    depends_on:
+      - sweetcorn-ducklake-postgres
+      - sweetcorn-ducklake-minio
+    networks:
+      - sweetcorn-ducklake-net
+
+  sweetcorn-ducklake-postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_USER: "admin"
+      POSTGRES_DB: "postgres"
+      POSTGRES_PASSWORD: "admin"
+      LANG: en_US.utf8
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=en-US"
+      TZ: "Europe/Vienna"
+    ports:
+      - "5432:5432"
+    volumes:
+      - sweetcorn-ducklake-postgres-data:/var/lib/postgresql/data
+    networks:
+      - sweetcorn-ducklake-net
+
+  sweetcorn-ducklake-minio:
+    image: quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z
+    command: ["server", "/data", "--console-address", ":9090"]
+    environment:
+      MINIO_ROOT_USER: "minio-user"
+      MINIO_ROOT_PASSWORD: "minio-secret"
+    ports:
+      - "9000:9000"
+      - "9090:9090"
+    volumes:
+      - sweetcorn-ducklake-minio-data:/data
+      - ./create-bucket.sh:/create-bucket.sh
+    post_start:
+      - command: ["./create-bucket.sh"]
+    networks:
+      - sweetcorn-ducklake-net
+
+networks:
+  sweetcorn-ducklake-net:
+
+volumes:
+  sweetcorn-ducklake-postgres-data:
+  sweetcorn-ducklake-minio-data:

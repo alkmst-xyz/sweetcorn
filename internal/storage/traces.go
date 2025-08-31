@@ -14,62 +14,64 @@ import (
 
 const (
 	createTracesTableSQL = `
-CREATE SEQUENCE IF NOT EXISTS otel_traces_id_seq;
+CREATE TABLE IF NOT EXISTS
+	otel_traces (
+		ts						TIMESTAMP_NS,
+		trace_id				VARCHAR,
+		span_id					VARCHAR,
+		parent_span_id			VARCHAR,
+		trace_state				VARCHAR,
+		span_name				VARCHAR,
+		span_kind				VARCHAR,
+		service_name			VARCHAR,
+		resource_attributes		JSON,
+		scope_name				VARCHAR,
+		scope_version			VARCHAR,
+		span_attributes			JSON,
+		duration				UBIGINT,
+		status_code				VARCHAR,
+		status_message			VARCHAR,
+		events_timestamps		TIMESTAMP_NS[],
+		events_names			VARCHAR[],
+		events_attributes		JSON[],
+		links_trace_ids			VARCHAR[],
+		links_span_ids			VARCHAR[],
+		links_trace_states		VARCHAR[],
+		links_attributes		JSON[]
+	);`
 
-CREATE TABLE IF NOT EXISTS otel_traces (
-	id						BIGINT PRIMARY KEY DEFAULT nextval ('otel_traces_id_seq'),
-	timestamp				TIMESTAMP_NS,
-	timestamp_time			TIMESTAMP_S GENERATED ALWAYS AS (CAST(Timestamp AS TIMESTAMP)),
-	trace_id				VARCHAR,
-	span_id					VARCHAR,
-	parent_span_id			VARCHAR,
-	trace_state				VARCHAR,
-	span_name				VARCHAR,
-	span_kind				VARCHAR,
-	service_name			VARCHAR,
-	resource_attributes		JSON,
-	scope_name				VARCHAR,
-	scope_version			VARCHAR,
-	span_attributes			JSON,
-	duration				UBIGINT,
-	status_code				VARCHAR,
-	status_message			VARCHAR,
-	events_timestamps		TIMESTAMP_NS[],
-	events_names			VARCHAR[],
-	events_attributes		JSON[],
-	links_trace_ids			VARCHAR[],
-	links_span_ids			VARCHAR[],
-	links_trace_states		VARCHAR[],
-	links_attributes		JSON[]
-);`
+	insertTracesSQL = `
+INSERT INTO
+	otel_traces (
+		ts,
+		trace_id,
+		span_id,
+		parent_span_id,
+		trace_state,
+		span_name,
+		span_kind,
+		service_name,
+		resource_attributes,
+		scope_name,
+		scope_version,
+		span_attributes,
+		duration,
+		status_code,
+		status_message,
+		events_timestamps,
+		events_names,
+		events_attributes,
+		links_trace_ids,
+		links_span_ids,
+		links_trace_states,
+		links_attributes
+	)
+VALUES
+	(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
-	insertTracesSQL = `INSERT INTO otel_traces (
-	timestamp,
-	trace_id,
-	span_id,
-	parent_span_id,
-	trace_state,
-	span_name,
-	span_kind,
-	service_name,
-	resource_attributes,
-	scope_name,
-	scope_version,
-	span_attributes,
-	duration,
-	status_code,
-	status_message,
-	events_timestamps,
-	events_names,
-	events_attributes,
-	links_trace_ids,
-	links_span_ids,
-	links_trace_states,
-	links_attributes
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
-
-	queryTracesSQL = `SELECT
-	timestamp,
+	queryTracesSQL = `
+SELECT
+	ts,
 	trace_id,
 	span_id,
 	parent_span_id,
@@ -94,10 +96,9 @@ CREATE TABLE IF NOT EXISTS otel_traces (
 FROM
 	otel_traces
 ORDER BY
-	timestamp DESC
+	ts DESC
 LIMIT
-	100;
-`
+	100;`
 
 	queryServicesSQL = `
 SELECT DISTINCT
@@ -122,7 +123,7 @@ LIMIT
 	// When using `struct_pack`, match it to the name of the golang struct field.
 	// This is useful when we deserialize during query. See `GetTraces()`.
 	// TODO:
-	// - AND CAST(timestamp AS TIMESTAMP) >= NOW() - INTERVAL '1 hour'
+	// - AND CAST(ts AS TIMESTAMP) >= NOW() - INTERVAL '1 hour'
 	// - AND (span_attributes->>'$."peer.service"') = 'telemetrygen-server'
 	tracesSQL = `
 SELECT
@@ -132,7 +133,7 @@ SELECT
 			"TraceID" := trace_id,
 			"SpanID" := span_id,
 			"OperationName" := span_name,
-			"StartTime" := epoch_us(timestamp),
+			"StartTime" := epoch_us(ts),
 			"Duration" := duration // 1000,
 			"ParentName" := parent_span_id,
 			"SpanAttributes" := span_attributes,
@@ -157,7 +158,7 @@ SELECT
 			"TraceID" := trace_id,
 			"SpanID" := span_id,
 			"OperationName" := span_name,
-			"StartTime" := epoch_us(timestamp),
+			"StartTime" := epoch_us(ts),
 			"Duration" := duration // 1000,
 			"ParentName" := parent_span_id,
 			"SpanAttributes" := span_attributes,
@@ -194,7 +195,7 @@ GROUP BY
 )
 
 type TraceRecord struct {
-	TimestampTime      int64            `json:"timestamp"`
+	Timestamp          int64            `json:"timestamp"`
 	TraceID            string           `json:"traceID"`
 	SpanID             string           `json:"spanID"`
 	ParentSpanID       string           `json:"parentSpanID"`
@@ -486,7 +487,7 @@ func QueryTraces(ctx context.Context, db *sql.DB) ([]TraceRecord, error) {
 		result.Duration = duration / 1000
 
 		// convert timestamp to unix epoch in microseconds
-		result.TimestampTime = timestamp.UnixMicro()
+		result.Timestamp = timestamp.UnixMicro()
 
 		results = append(results, result)
 	}
