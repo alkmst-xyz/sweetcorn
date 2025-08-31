@@ -115,8 +115,8 @@ SELECT DISTINCT
 FROM
 	otel_traces
 WHERE
-	(? IS NULL OR service_name = ?)
-	AND (? IS NULL OR span_kind = ?)
+	service_name = ?
+	AND (? = '' OR span_kind = ?)
 LIMIT
 	100;`
 
@@ -497,13 +497,12 @@ func GetServices(ctx context.Context, db *sql.DB) ([]string, error) {
 }
 
 type TraceOperationsParams struct {
-	ServiceName *string
-	SpanKind    *string
+	ServiceName string
+	SpanKind    string
 }
 
 func TraceOperations(ctx context.Context, db *sql.DB, params TraceOperationsParams) ([]string, error) {
 	rows, err := db.QueryContext(ctx, traceOperationsSQL,
-		params.ServiceName,
 		params.ServiceName,
 		params.SpanKind,
 		params.SpanKind,

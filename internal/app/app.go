@@ -28,6 +28,8 @@ const (
 	jaegerOperationParam = "operation"
 )
 
+var errServiceParameterRequired = fmt.Errorf("parameter '%s' is required", jaegerServiceParam)
+
 type WebService struct {
 	ctx context.Context
 	db  *sql.DB
@@ -93,28 +95,20 @@ func (s WebService) jaegerServices(w http.ResponseWriter, r *http.Request) {
 	jaegerWriteResponse(w, &resp)
 }
 
-func parseTraceOperationsParams(r *http.Request) storage.TraceOperationsParams {
-	q := r.URL.Query()
-
-	var p storage.TraceOperationsParams
-
-	// ?service
-	if vals, ok := q[jaegerServiceParam]; ok {
-		p.ServiceName = &vals[0]
-	}
-
-	// ?spanKind
-	if vals, ok := q[jaegerSpanKindParam]; ok {
-		p.SpanKind = &vals[0]
-	}
-
-	return p
-}
-
 func (s WebService) jaegerOperations(w http.ResponseWriter, r *http.Request) {
-	params := parseTraceOperationsParams(r)
+	service := r.FormValue(jaegerServiceParam)
+	if service == "" {
+		if jaegerHandleError(w, errServiceParameterRequired, http.StatusBadRequest) {
+			return
+		}
+	}
+	spanKind := r.FormValue(jaegerSpanKindParam)
 
-	data, err := storage.TraceOperations(s.ctx, s.db, params)
+	data, err := storage.TraceOperations(s.ctx, s.db, storage.TraceOperationsParams{
+		ServiceName: service,
+		SpanKind:    spanKind,
+	})
+
 	if jaegerHandleError(w, err, http.StatusInternalServerError) {
 		return
 	}
@@ -128,16 +122,13 @@ func (s WebService) jaegerOperations(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s WebService) jaegerOperationsLegacy(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
+	// Here we expect service name to not be empty because it the result of a path match.
+	service := r.PathValue(jaegerServiceParam)
 
-	var params storage.TraceOperationsParams
-
-	// ?service
-	if vals, ok := q[jaegerServiceParam]; ok {
-		params.ServiceName = &vals[0]
-	}
-
-	data, err := storage.TraceOperations(s.ctx, s.db, params)
+	data, err := storage.TraceOperations(s.ctx, s.db, storage.TraceOperationsParams{
+		ServiceName: service,
+		SpanKind:    "",
+	})
 	if jaegerHandleError(w, err, http.StatusInternalServerError) {
 		return
 	}
