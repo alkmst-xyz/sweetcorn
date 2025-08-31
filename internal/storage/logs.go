@@ -12,48 +12,50 @@ import (
 
 const (
 	createLogsTableSQL = `
-CREATE SEQUENCE IF NOT EXISTS otel_logs_id_seq;
+CREATE TABLE IF NOT EXISTS
+	otel_logs (
+		ts						TIMESTAMP_NS,
+		trace_id				VARCHAR,
+		span_id					VARCHAR,
+		trace_flags				UTINYINT,
+		severity_text			VARCHAR,
+		severity_number			UTINYINT,
+		service_name			VARCHAR,
+		body					VARCHAR,
+		resource_schema_url		VARCHAR,
+		resource_attributes		JSON,
+		scope_schema_url 		VARCHAR,
+		scope_name				VARCHAR,
+		scope_version			VARCHAR,
+		scope_attributes		JSON,
+		log_attributes			JSON
+	);`
 
-CREATE TABLE IF NOT EXISTS otel_logs (
-	id						BIGINT PRIMARY KEY DEFAULT nextval ('otel_logs_id_seq'),
-	timestamp				TIMESTAMP_NS,
-	timestamp_time			TIMESTAMP_S GENERATED ALWAYS AS (CAST(Timestamp AS TIMESTAMP)),
-	trace_id				VARCHAR,
-	span_id					VARCHAR,
-	trace_flags				UTINYINT,
-	severity_text			VARCHAR,
-	severity_number			UTINYINT,
-	service_name			VARCHAR,
-	body					VARCHAR,
-	resource_schema_url		VARCHAR,
-	resource_attributes		JSON,
-	scope_schema_url 		VARCHAR,
-	scope_name				VARCHAR,
-	scope_version			VARCHAR,
-	scope_attributes		JSON,
-	log_attributes			JSON
-);`
+	insertLogsSQL = `
+INSERT INTO
+	otel_logs (
+		ts,
+		trace_id,
+		span_id,
+		trace_flags,
+		severity_text,
+		severity_number,
+		service_name,
+		body,
+		resource_schema_url,
+		resource_attributes,
+		scope_schema_url,
+		scope_name,
+		scope_version,
+		scope_attributes,
+		log_attributes
+	)
+VALUES
+	(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
-	insertLogsSQL = `INSERT INTO otel_logs (
-	timestamp,
-	trace_id,
-	span_id,
-	trace_flags,
-	severity_text,
-	severity_number,
-	service_name,
-	body,
-	resource_schema_url,
-	resource_attributes,
-	scope_schema_url,
-	scope_name,
-	scope_version,
-	scope_attributes,
-	log_attributes
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
-
-	queryLogsSQL = `SELECT
-	timestamp,
+	queryLogsSQL = `
+SELECT
+	ts,
 	trace_id,
 	span_id,
 	trace_flags,
@@ -71,14 +73,13 @@ CREATE TABLE IF NOT EXISTS otel_logs (
 FROM
 	otel_logs
 ORDER BY
-	timestamp DESC
+	ts DESC
 LIMIT
-	100;
-`
+	100;`
 )
 
 type LogRecord struct {
-	Timestamp          time.Time      `json:"timestamp"`
+	Timestamp          int64          `json:"timestamp"`
 	TraceId            string         `json:"traceId"`
 	SpanId             string         `json:"spanId"`
 	TraceFlags         uint8          `json:"traceFlags"`
@@ -114,8 +115,10 @@ func QueryLogs(ctx context.Context, db *sql.DB) ([]LogRecord, error) {
 	for rows.Next() {
 		var result LogRecord
 
+		var timestamp time.Time
+
 		err := rows.Scan(
-			&result.Timestamp,
+			&timestamp,
 			&result.TraceId,
 			&result.SpanId,
 			&result.TraceFlags,
@@ -135,6 +138,9 @@ func QueryLogs(ctx context.Context, db *sql.DB) ([]LogRecord, error) {
 			return nil, err
 		}
 
+		// convert timestamp to unix epoch in microseconds
+		result.Timestamp = timestamp.UnixMicro()
+
 		results = append(results, result)
 	}
 
@@ -143,9 +149,9 @@ func QueryLogs(ctx context.Context, db *sql.DB) ([]LogRecord, error) {
 
 func InsertLogsData(ctx context.Context, db *sql.DB, ld plog.Logs) error {
 	rsLogs := ld.ResourceLogs()
-
 	for i := range rsLogs.Len() {
 		logs := rsLogs.At(i)
+
 		res := logs.Resource()
 		resURL := logs.SchemaUrl()
 		resAttr := res.Attributes()
@@ -159,9 +165,11 @@ func InsertLogsData(ctx context.Context, db *sql.DB, ld plog.Logs) error {
 		for j := range logs.ScopeLogs().Len() {
 			scopeLog := logs.ScopeLogs().At(j)
 			scopeURL := scopeLog.SchemaUrl()
+
 			scopeLogScope := scopeLog.Scope()
-			scopeName := scopeLog.Scope().Name()
-			scopeVersion := scopeLog.Scope().Version()
+			scopeName := scopeLogScope.Name()
+			scopeVersion := scopeLogScope.Version()
+
 			scopeLogRecords := scopeLog.LogRecords()
 
 			scopeAttrBytes, scopeAttrErr := json.Marshal(scopeLogScope.Attributes().AsRaw())
@@ -170,27 +178,27 @@ func InsertLogsData(ctx context.Context, db *sql.DB, ld plog.Logs) error {
 			}
 
 			for k := range scopeLogRecords.Len() {
-				r := scopeLogRecords.At(k)
+				logRecord := scopeLogRecords.At(k)
 
-				logAttrBytes, logAttrErr := json.Marshal(r.Attributes().AsRaw())
+				logAttrBytes, logAttrErr := json.Marshal(logRecord.Attributes().AsRaw())
 				if logAttrErr != nil {
 					return fmt.Errorf("failed to marshal json log attributes: %w", logAttrErr)
 				}
 
-				timestamp := r.Timestamp()
+				timestamp := logRecord.Timestamp()
 				if timestamp == 0 {
-					timestamp = r.ObservedTimestamp()
+					timestamp = logRecord.ObservedTimestamp()
 				}
 
 				_, err := db.ExecContext(ctx, insertLogsSQL,
 					timestamp.AsTime(),
-					r.TraceID().String(),
-					r.SpanID().String(),
-					uint8(r.Flags()),
-					r.SeverityText(),
-					uint8(r.SeverityNumber()),
+					logRecord.TraceID().String(),
+					logRecord.SpanID().String(),
+					uint8(logRecord.Flags()),
+					logRecord.SeverityText(),
+					uint8(logRecord.SeverityNumber()),
 					serviceName,
-					r.Body().AsString(),
+					logRecord.Body().AsString(),
 					resURL,
 					resAttrBytes,
 					scopeURL,
