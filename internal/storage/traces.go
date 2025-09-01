@@ -171,6 +171,8 @@ FROM
 	otel_traces
 WHERE
 	trace_id = ?
+	AND (? = 0 OR epoch_us(ts) >= ?)
+	AND (? = 0 OR epoch_us(ts) <  ?)
 GROUP BY
 	trace_id;`
 
@@ -629,12 +631,28 @@ func SearchTraces(ctx context.Context, db *sql.DB, params SearchTracesParams) ([
 
 type TraceParams struct {
 	TraceID   string
-	StartTime *time.Time
-	EndTime   *time.Time
+	StartTime time.Time
+	EndTime   time.Time
 }
 
 func Trace(ctx context.Context, db *sql.DB, params TraceParams) (TraceResponse, error) {
-	row := db.QueryRowContext(ctx, traceSQL, params.TraceID)
+	var startTime int64
+	if !params.StartTime.IsZero() {
+		startTime = params.StartTime.UnixMicro()
+	}
+
+	var endTime int64
+	if !params.EndTime.IsZero() {
+		endTime = params.EndTime.UnixMicro()
+	}
+
+	row := db.QueryRowContext(ctx, traceSQL,
+		params.TraceID,
+		startTime,
+		startTime,
+		endTime,
+		endTime,
+	)
 
 	var result TraceResponse
 	var spans duckdb.Composite[[]Span]

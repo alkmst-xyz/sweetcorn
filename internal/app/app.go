@@ -158,24 +158,24 @@ func parseSearchTracesParams(r *http.Request) (storage.SearchTracesParams, bool)
 
 	// ?start
 	if vals, ok := q[jaegerStartTimeParam]; ok {
-		t, err := parseTimeParam(vals[0], defaultStartTime)
+		t, err := parseMicrosecondsWithDefault(vals[0], defaultStartTime)
 
 		if err != nil {
 			return p, false
 		}
 
-		p.StartTimeMin = t
+		p.StartTimeMin = &t
 	}
 
 	// ?end
 	if vals, ok := q[jaegerEndTimeParam]; ok {
-		t, err := parseTimeParam(vals[0], defaultEndTime)
+		t, err := parseMicrosecondsWithDefault(vals[0], defaultEndTime)
 
 		if err != nil {
 			return p, false
 		}
 
-		p.StartTimeMax = t
+		p.StartTimeMax = &t
 	}
 
 	return p, true
@@ -223,63 +223,66 @@ func parseUnixMicros(val string) (time.Time, error) {
 	return time.Unix(0, 0).Add(time.Duration(i) * time.Microsecond), nil
 }
 
-// parseTimeParam parses a sting into a Unix timestamp. If the provided
-// string is empty, it uses the provided defaultTimeFn.
-func parseTimeParam(raw string, defaultTimeFn func() time.Time) (*time.Time, error) {
+// parseMicrosecondsWithDefault parses a string into a Unix timestamp.
+// If the input string is empty, it uses the provided defaultTimeFn.
+func parseMicrosecondsWithDefault(raw string, defaultTimeFn func() time.Time) (time.Time, error) {
 	if raw == "" {
 		t := defaultTimeFn()
-		return &t, nil
+		return t, nil
 	}
 
 	t, err := parseUnixMicros(raw)
 	if err != nil {
-		return nil, err
+		return time.Time{}, err
 	}
 
-	return &t, nil
+	return t, nil
 }
 
-func parseTraceParams(r *http.Request) (storage.TraceParams, bool) {
-	q := r.URL.Query()
+func parseMicroseconds(raw string) (time.Time, error) {
+	t, err := parseUnixMicros(raw)
+	if err != nil {
+		return time.Time{}, err
+	}
 
+	return t, nil
+}
+
+// Note: If no start or end time is provided, they are set to nil.
+func parseTraceParams(r *http.Request) (storage.TraceParams, error) {
 	var p storage.TraceParams
 
-	// {traceID}
-	traceID := r.PathValue(jaegerTraceIDParam)
-	if traceID == "" {
-		return p, false
-	}
-	p.TraceID = traceID
+	// /{traceID}
+	// Note: traceID should not be empty because it the result of a path match.
+	p.TraceID = r.PathValue(jaegerTraceIDParam)
 
 	// ?start
-	if vals, ok := q[jaegerStartTimeParam]; ok {
-		t, err := parseTimeParam(vals[0], defaultStartTime)
-
+	if val := r.FormValue(jaegerStartTimeParam); val != "" {
+		startTime, err := parseMicroseconds(val)
 		if err != nil {
-			return p, false
+			return p, err
 		}
 
-		p.StartTime = t
+		p.StartTime = startTime
 	}
 
 	// ?end
-	if vals, ok := q[jaegerEndTimeParam]; ok {
-		t, err := parseTimeParam(vals[0], defaultEndTime)
-
+	if val := r.FormValue(jaegerEndTimeParam); val != "" {
+		endTime, err := parseMicroseconds(val)
 		if err != nil {
-			return p, false
+			return p, err
 		}
 
-		p.EndTime = t
+		p.EndTime = endTime
 	}
 
-	return p, true
+	return p, nil
 }
 
 func (s WebService) jaegerTrace(w http.ResponseWriter, r *http.Request) {
-	params, ok := parseTraceParams(r)
-	if !ok {
-		// TODO: return error
+	params, err := parseTraceParams(r)
+	if err != nil {
+		jaegerHandleError(w, err, http.StatusBadRequest)
 		return
 	}
 
@@ -309,13 +312,13 @@ func parseDependenciesParams(r *http.Request) (storage.DependenciesParams, bool)
 
 	// ?end
 	if vals, ok := q[jaegerEndTimeParam]; ok {
-		t, err := parseTimeParam(vals[0], defaultEndTime)
+		t, err := parseMicrosecondsWithDefault(vals[0], defaultEndTime)
 
 		if err != nil {
 			return p, false
 		}
 
-		p.EndTime = t
+		p.EndTime = &t
 	}
 
 	// TODO: ?lookback
