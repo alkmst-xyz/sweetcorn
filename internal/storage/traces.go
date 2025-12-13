@@ -9,7 +9,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/marcboeker/go-duckdb/v2"
+	"github.com/duckdb/duckdb-go/v2"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 

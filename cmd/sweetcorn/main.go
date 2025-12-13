@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	_ "github.com/marcboeker/go-duckdb/v2"
+	_ "github.com/duckdb/duckdb-go/v2"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/alkmst-xyz/sweetcorn/internal/app"
