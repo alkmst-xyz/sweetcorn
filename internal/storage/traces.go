@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -114,8 +115,8 @@ SELECT DISTINCT
 FROM
 	otel_traces
 WHERE
-	(? IS NULL OR service_name = ?)
-	AND (? IS NULL OR span_kind = ?)
+	service_name = ?
+	AND (? = '' OR span_kind = ?)
 LIMIT
 	100;`
 
@@ -170,6 +171,8 @@ FROM
 	otel_traces
 WHERE
 	trace_id = ?
+	AND (? = 0 OR epoch_us(ts) >= ?)
+	AND (? = 0 OR epoch_us(ts) <  ?)
 GROUP BY
 	trace_id;`
 
@@ -220,14 +223,6 @@ type TraceRecord struct {
 }
 
 // Jaeger Query
-
-type ServicesResponse struct {
-	Data   []string `json:"data"`
-	Errors any      `json:"errors"`
-	Limit  int      `json:"limit"`
-	Offset int      `json:"offset"`
-	Total  int      `json:"total"`
-}
 
 type TraceKeyValuePair struct {
 	Key   string `json:"key"`
@@ -281,29 +276,13 @@ type TraceResponse struct {
 	Spans     []Span                  `json:"spans"`
 }
 
-type TracesResponse struct {
-	Data   []TraceResponse `json:"data"`
-	Errors any             `json:"errors"`
-	Limit  int             `json:"limit"`
-	Offset int             `json:"offset"`
-	Total  int             `json:"total"`
-}
-
 type DependenciesData struct {
 	ParentServiceName string `json:"parent"`
 	ChildServiceName  string `json:"child"`
 	Count             int    `json:"callCount"`
 }
 
-type DependenciesError struct {
-	Code int    `json:"code"`
-	Msg  string `json:"msg"`
-}
-
-type DependenciesResponse struct {
-	Data   []DependenciesData  `json:"data"`
-	Errors []DependenciesError `json:"errors"`
-}
+var ErrTraceNotFound = errors.New("trace not found")
 
 func convertEvents(events ptrace.SpanEventSlice) (times []time.Time, names, attrs []string, err error) {
 	for i := 0; i < events.Len(); i++ {
@@ -495,7 +474,7 @@ func QueryTraces(ctx context.Context, db *sql.DB) ([]TraceRecord, error) {
 	return results, nil
 }
 
-func GetDistinctServices(ctx context.Context, db *sql.DB) ([]string, error) {
+func GetServices(ctx context.Context, db *sql.DB) ([]string, error) {
 	rows, err := db.QueryContext(ctx, queryServicesSQL)
 	if err != nil {
 		return nil, err
@@ -520,13 +499,12 @@ func GetDistinctServices(ctx context.Context, db *sql.DB) ([]string, error) {
 }
 
 type TraceOperationsParams struct {
-	ServiceName *string
-	SpanKind    *string
+	ServiceName string
+	SpanKind    string
 }
 
 func TraceOperations(ctx context.Context, db *sql.DB, params TraceOperationsParams) ([]string, error) {
 	rows, err := db.QueryContext(ctx, traceOperationsSQL,
-		params.ServiceName,
 		params.ServiceName,
 		params.SpanKind,
 		params.SpanKind,
@@ -653,12 +631,28 @@ func SearchTraces(ctx context.Context, db *sql.DB, params SearchTracesParams) ([
 
 type TraceParams struct {
 	TraceID   string
-	StartTime *time.Time
-	EndTime   *time.Time
+	StartTime time.Time
+	EndTime   time.Time
 }
 
 func Trace(ctx context.Context, db *sql.DB, params TraceParams) (TraceResponse, error) {
-	row := db.QueryRowContext(ctx, traceSQL, params.TraceID)
+	var startTime int64
+	if !params.StartTime.IsZero() {
+		startTime = params.StartTime.UnixMicro()
+	}
+
+	var endTime int64
+	if !params.EndTime.IsZero() {
+		endTime = params.EndTime.UnixMicro()
+	}
+
+	row := db.QueryRowContext(ctx, traceSQL,
+		params.TraceID,
+		startTime,
+		startTime,
+		endTime,
+		endTime,
+	)
 
 	var result TraceResponse
 	var spans duckdb.Composite[[]Span]
@@ -668,7 +662,7 @@ func Trace(ctx context.Context, db *sql.DB, params TraceParams) (TraceResponse, 
 		&spans,
 	)
 	if err == sql.ErrNoRows {
-		return result, fmt.Errorf("no trace found with id: %s", params.TraceID)
+		return result, ErrTraceNotFound
 	}
 	if err != nil {
 		return result, err
