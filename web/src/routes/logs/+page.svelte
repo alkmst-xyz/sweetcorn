@@ -44,6 +44,7 @@
 						<ThSort {table} field="scopeVersion">Scope Version</ThSort>
 						<ThSort {table} field="scopeAttributes">Scope Attributes</ThSort>
 						<ThSort {table} field="logAttributes">Log Attributes</ThSort>
+						<ThSort {table} field="eventName">Event Name</ThSort>
 					</tr>
 					<tr>
 						<ThFilter {table} field="timestamp" />
@@ -61,6 +62,7 @@
 						<ThFilter {table} field="scopeVersion" />
 						<ThFilter {table} field="scopeAttributes" />
 						<ThFilter {table} field="logAttributes" />
+						<ThFilter {table} field="eventName" />
 					</tr>
 				</thead>
 				<tbody>
@@ -83,6 +85,7 @@
 							<td>{row.scopeVersion}</td>
 							<td>{JSON.stringify(row.scopeAttributes)}</td>
 							<td>{JSON.stringify(row.logAttributes)}</td>
+							<td>{row.eventName}</td>
 						</tr>
 					{/each}
 				</tbody>

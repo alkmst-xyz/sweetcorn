@@ -17,6 +17,7 @@ export type LogRecord = {
 	scopeVersion: string;
 	scopeAttributes: { [key: string]: unknown };
 	logAttributes: { [key: string]: unknown };
+	eventName: string;
 };
 
 export async function getLogs(fetch: FetchType) {

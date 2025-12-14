@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS
 		scope_name				VARCHAR,
 		scope_version			VARCHAR,
 		scope_attributes		JSON,
-		log_attributes			JSON
+		log_attributes			JSON,
+		event_name				VARCHAR
 	);`
 
 	insertLogsSQL = `
@@ -48,10 +49,11 @@ INSERT INTO
 		scope_name,
 		scope_version,
 		scope_attributes,
-		log_attributes
+		log_attributes,
+		event_name
 	)
 VALUES
-	(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
+	(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
 	queryLogsSQL = `
 SELECT
@@ -69,7 +71,8 @@ SELECT
 	scope_name,
 	scope_version,
 	scope_attributes,
-	log_attributes
+	log_attributes,
+	event_name
 FROM
 	otel_logs
 ORDER BY
@@ -94,6 +97,7 @@ type LogRecord struct {
 	ScopeVersion       string         `json:"scopeVersion"`
 	ScopeAttributes    map[string]any `json:"scopeAttributes"`
 	LogAttributes      map[string]any `json:"logAttributes"`
+	EventName          string         `json:"eventName"`
 }
 
 func CreateLogsTable(ctx context.Context, cfg *Config, db *sql.DB) error {
@@ -133,6 +137,7 @@ func QueryLogs(ctx context.Context, db *sql.DB) ([]LogRecord, error) {
 			&result.ScopeVersion,
 			&result.ScopeAttributes,
 			&result.LogAttributes,
+			&result.EventName,
 		)
 		if err != nil {
 			return nil, err
@@ -206,6 +211,7 @@ func InsertLogsData(ctx context.Context, db *sql.DB, ld plog.Logs) error {
 					scopeVersion,
 					scopeAttrBytes,
 					logAttrBytes,
+					logRecord.EventName(),
 				)
 				if err != nil {
 					return err
