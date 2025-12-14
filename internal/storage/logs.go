@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS
 		ts						TIMESTAMP_NS,
 		trace_id				VARCHAR,
 		span_id					VARCHAR,
-		trace_flags				UTINYINT,
+		trace_flags				UINTEGER,
 		severity_text			VARCHAR,
 		severity_number			UTINYINT,
 		service_name			VARCHAR,
@@ -82,7 +82,7 @@ type LogRecord struct {
 	Timestamp          int64          `json:"timestamp"`
 	TraceId            string         `json:"traceId"`
 	SpanId             string         `json:"spanId"`
-	TraceFlags         uint8          `json:"traceFlags"`
+	TraceFlags         uint32         `json:"traceFlags"`
 	SeverityText       string         `json:"severityText"`
 	SeverityNumber     uint8          `json:"severityNumber"`
 	ServiceName        string         `json:"serviceName"`
@@ -194,7 +194,7 @@ func InsertLogsData(ctx context.Context, db *sql.DB, ld plog.Logs) error {
 					timestamp.AsTime(),
 					logRecord.TraceID().String(),
 					logRecord.SpanID().String(),
-					uint8(logRecord.Flags()),
+					logRecord.Flags(),
 					logRecord.SeverityText(),
 					uint8(logRecord.SeverityNumber()),
 					serviceName,
