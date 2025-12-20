@@ -26,8 +26,17 @@ docker compose up -d
   - [x] Basic insert
   - [x] Basic query
   - [x] Create and query views
-- [x] Traces
+- [ ] Traces
+  - [x] Basic ingest
+  - [x] Basic query
+  - [ ] Determine `ProcessID`
 - [ ] Metrics
+  - [x] Gauge
+  - [x] Sum
+  - [x] Histogram
+  - [x] Exponential Histogram
+  - [x] Summary
+  - [ ] Support Exemplars
 - [x] Basic HTTP server
 - [x] Basic GRPC server
 - [x] Handle protobuf payload

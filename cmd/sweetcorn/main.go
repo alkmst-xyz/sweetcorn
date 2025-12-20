@@ -33,12 +33,8 @@ func main() {
 
 	ctx := context.Background()
 
-	if err := storage.CreateLogsTable(ctx, cfg, db); err != nil {
-		log.Fatalf("Failed to create logs table: %v", err)
-	}
-
-	if err := storage.CreateTracesTable(ctx, cfg, db); err != nil {
-		log.Fatalf("Failed to create traces table: %v", err)
+	if err := storage.InitStorage(ctx, cfg, db); err != nil {
+		log.Fatalf("Failed to initialize storage: %v", err)
 	}
 
 	// start servers

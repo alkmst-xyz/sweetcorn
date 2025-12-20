@@ -15,6 +15,7 @@ import (
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/rs/cors"
 	"go.opentelemetry.io/collector/pdata/plog/plogotlp"
+	"go.opentelemetry.io/collector/pdata/pmetric/pmetricotlp"
 	"go.opentelemetry.io/collector/pdata/ptrace/ptraceotlp"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/status"
@@ -52,9 +53,11 @@ var (
 type encoder interface {
 	unmarshalTracesRequest(buf []byte) (ptraceotlp.ExportRequest, error)
 	unmarshalLogsRequest(buf []byte) (plogotlp.ExportRequest, error)
+	unmarshalMetricsRequest(buf []byte) (pmetricotlp.ExportRequest, error)
 
 	marshalTracesResponse(ptraceotlp.ExportResponse) ([]byte, error)
 	marshalLogsResponse(plogotlp.ExportResponse) ([]byte, error)
+	marshalMetricsResponse(pmetricotlp.ExportResponse) ([]byte, error)
 
 	marshalStatus(rsp *spb.Status) ([]byte, error)
 
@@ -75,6 +78,12 @@ func (protoEncoder) unmarshalLogsRequest(buf []byte) (plogotlp.ExportRequest, er
 	return req, err
 }
 
+func (protoEncoder) unmarshalMetricsRequest(buf []byte) (pmetricotlp.ExportRequest, error) {
+	req := pmetricotlp.NewExportRequest()
+	err := req.UnmarshalProto(buf)
+	return req, err
+}
+
 func (protoEncoder) marshalTracesResponse(resp ptraceotlp.ExportResponse) ([]byte, error) {
 	return resp.MarshalProto()
 }
@@ -83,12 +92,8 @@ func (protoEncoder) marshalLogsResponse(resp plogotlp.ExportResponse) ([]byte, e
 	return resp.MarshalProto()
 }
 
-func (jsonEncoder) marshalTracesResponse(resp ptraceotlp.ExportResponse) ([]byte, error) {
-	return resp.MarshalJSON()
-}
-
-func (jsonEncoder) marshalLogsResponse(resp plogotlp.ExportResponse) ([]byte, error) {
-	return resp.MarshalJSON()
+func (protoEncoder) marshalMetricsResponse(resp pmetricotlp.ExportResponse) ([]byte, error) {
+	return resp.MarshalProto()
 }
 
 func (protoEncoder) marshalStatus(resp *spb.Status) ([]byte, error) {
@@ -111,6 +116,24 @@ func (jsonEncoder) unmarshalLogsRequest(buf []byte) (plogotlp.ExportRequest, err
 	req := plogotlp.NewExportRequest()
 	err := req.UnmarshalJSON(buf)
 	return req, err
+}
+
+func (jsonEncoder) unmarshalMetricsRequest(buf []byte) (pmetricotlp.ExportRequest, error) {
+	req := pmetricotlp.NewExportRequest()
+	err := req.UnmarshalJSON(buf)
+	return req, err
+}
+
+func (jsonEncoder) marshalTracesResponse(resp ptraceotlp.ExportResponse) ([]byte, error) {
+	return resp.MarshalJSON()
+}
+
+func (jsonEncoder) marshalLogsResponse(resp plogotlp.ExportResponse) ([]byte, error) {
+	return resp.MarshalJSON()
+}
+
+func (jsonEncoder) marshalMetricsResponse(resp pmetricotlp.ExportResponse) ([]byte, error) {
+	return resp.MarshalJSON()
 }
 
 func (jsonEncoder) marshalStatus(resp *spb.Status) ([]byte, error) {
@@ -291,6 +314,41 @@ func (s HTTPService) handleTraces(resp http.ResponseWriter, req *http.Request) {
 }
 
 //
+// Metrics
+//
+
+func (s HTTPService) handleMetrics(resp http.ResponseWriter, req *http.Request) {
+	enc, ok := readContentType(resp, req)
+	if !ok {
+		return
+	}
+
+	body, ok := readAndCloseBody(resp, req, enc)
+	if !ok {
+		return
+	}
+
+	otlpReq, err := enc.unmarshalMetricsRequest(body)
+	if err != nil {
+		writeError(resp, enc, err, http.StatusBadRequest)
+		return
+	}
+
+	err = storage.IngestMetricsData(s.ctx, s.db, otlpReq.Metrics())
+	if err != nil {
+		writeError(resp, enc, err, http.StatusInternalServerError)
+		return
+	}
+
+	msg, err := enc.marshalMetricsResponse(pmetricotlp.NewExportResponse())
+	if err != nil {
+		writeError(resp, enc, err, http.StatusInternalServerError)
+		return
+	}
+	writeResponse(resp, enc.contentType(), http.StatusOK, msg)
+}
+
+//
 // Main
 //
 
@@ -303,6 +361,7 @@ func StartHTTPServer(ctx context.Context, db *sql.DB, addr string) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/logs", svc.handleLogs)
 	mux.HandleFunc("POST /v1/traces", svc.handleTraces)
+	mux.HandleFunc("POST /v1/metrics", svc.handleMetrics)
 
 	server := &http.Server{
 		Addr:    addr,
