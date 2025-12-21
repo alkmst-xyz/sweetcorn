@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
+	"github.com/duckdb/duckdb-go/v2"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
@@ -148,6 +150,62 @@ func (s *summaryMetrics) insert(ctx context.Context, db *sql.DB) error {
 	}
 
 	return nil
+}
+
+type MetricsSummaryRecord struct {
+	MetricsRecordBase
+	Count             uint64    `json:"count"`
+	Sum               float64   `json:"sum"`
+	QuantileQuantiles []float64 `json:"quantileQuantiles"`
+	QuantileValues    []float64 `json:"quantileValues"`
+}
+
+func QueryMetricsSummary(ctx context.Context, db *sql.DB) ([]MetricsSummaryRecord, error) {
+	rows, err := db.QueryContext(ctx, queryMetricsSummarySQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]MetricsSummaryRecord, 0)
+
+	for rows.Next() {
+		var result MetricsSummaryRecord
+
+		var timestamp time.Time
+
+		var quantileQuantiles duckdb.Composite[[]float64]
+		var quantileValues duckdb.Composite[[]float64]
+
+		err := rows.Scan(
+			&timestamp,
+			&result.ServiceName,
+			&result.MetricName,
+			&result.MetricDescription,
+			&result.MetricUnit,
+			&result.ResourceAttributes,
+			&result.ScopeName,
+			&result.ScopeVersion,
+			&result.Attributes,
+			&result.Sum,
+			&result.Count,
+			&quantileQuantiles,
+			&quantileValues,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// convert timestamp to unix epoch in microseconds
+		result.Timestamp = timestamp.UnixMicro()
+
+		result.QuantileQuantiles = quantileQuantiles.Get()
+		result.QuantileValues = quantileValues.Get()
+
+		results = append(results, result)
+	}
+
+	return results, nil
 }
 
 func convertValueAtQuantile(valueAtQuantile pmetric.SummaryDataPointValueAtQuantileSlice) (quantiles []float64, values []float64) {

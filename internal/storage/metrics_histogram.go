@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
+	"github.com/duckdb/duckdb-go/v2"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
@@ -155,4 +157,64 @@ func (h *histogramMetrics) insert(ctx context.Context, db *sql.DB) error {
 	}
 
 	return nil
+}
+
+type MetricsHistogramRecord struct {
+	MetricsRecordBase
+	Count          uint64    `json:"count"`
+	Sum            float64   `json:"sum"`
+	BucketCounts   []uint64  `json:"bucketCounts"`
+	ExplicitBounds []float64 `json:"explicitBounds"`
+	Min            float64   `json:"min"`
+	Max            float64   `json:"max"`
+}
+
+func QueryMetricsHistogram(ctx context.Context, db *sql.DB) ([]MetricsHistogramRecord, error) {
+	rows, err := db.QueryContext(ctx, queryMetricsHistogramSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]MetricsHistogramRecord, 0)
+
+	for rows.Next() {
+		var result MetricsHistogramRecord
+
+		var timestamp time.Time
+
+		var bucketCounts duckdb.Composite[[]uint64]
+		var explicitBounds duckdb.Composite[[]float64]
+
+		err := rows.Scan(
+			&timestamp,
+			&result.ServiceName,
+			&result.MetricName,
+			&result.MetricDescription,
+			&result.MetricUnit,
+			&result.ResourceAttributes,
+			&result.ScopeName,
+			&result.ScopeVersion,
+			&result.Attributes,
+			&result.Count,
+			&result.Sum,
+			&bucketCounts,
+			&explicitBounds,
+			&result.Min,
+			&result.Max,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// convert timestamp to unix epoch in microseconds
+		result.Timestamp = timestamp.UnixMicro()
+
+		result.BucketCounts = bucketCounts.Get()
+		result.ExplicitBounds = explicitBounds.Get()
+
+		results = append(results, result)
+	}
+
+	return results, nil
 }

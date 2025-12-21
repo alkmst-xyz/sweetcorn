@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
@@ -143,4 +144,52 @@ func (s *sumMetrics) insert(ctx context.Context, db *sql.DB) error {
 	}
 
 	return nil
+}
+
+type MetricsSumRecord struct {
+	MetricsRecordBase
+	Value                  float64 `json:"value"`
+	AggregationTemporality int32   `json:"aggregationTemporality"`
+	IsMonotonic            bool    `json:"isMonotonic"`
+}
+
+func QueryMetricsSum(ctx context.Context, db *sql.DB) ([]MetricsSumRecord, error) {
+	rows, err := db.QueryContext(ctx, queryMetricsSumSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]MetricsSumRecord, 0)
+
+	for rows.Next() {
+		var result MetricsSumRecord
+
+		var timestamp time.Time
+
+		err := rows.Scan(
+			&timestamp,
+			&result.ServiceName,
+			&result.MetricName,
+			&result.MetricDescription,
+			&result.MetricUnit,
+			&result.ResourceAttributes,
+			&result.ScopeName,
+			&result.ScopeVersion,
+			&result.Attributes,
+			&result.Value,
+			&result.AggregationTemporality,
+			&result.IsMonotonic,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// convert timestamp to unix epoch in microseconds
+		result.Timestamp = timestamp.UnixMicro()
+
+		results = append(results, result)
+	}
+
+	return results, nil
 }

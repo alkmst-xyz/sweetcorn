@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
+	"github.com/duckdb/duckdb-go/v2"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
@@ -142,7 +144,6 @@ func (e *expHistogramMetrics) insert(ctx context.Context, db *sql.DB) error {
 			if attrErr != nil {
 				return fmt.Errorf("failed to marshal json metric attributes: %w", attrErr)
 			}
-			// var some []uint64
 
 			_, err := db.ExecContext(ctx, e.insertSQL,
 				dp.Timestamp().AsTime(),
@@ -160,10 +161,8 @@ func (e *expHistogramMetrics) insert(ctx context.Context, db *sql.DB) error {
 				dp.ZeroCount(),
 				dp.Positive().Offset(),
 				dp.Positive().BucketCounts().AsRaw(),
-				// some,
 				dp.Negative().Offset(),
 				dp.Negative().BucketCounts().AsRaw(),
-				// some,
 				dp.Min(),
 				dp.Max(),
 			)
@@ -174,4 +173,72 @@ func (e *expHistogramMetrics) insert(ctx context.Context, db *sql.DB) error {
 	}
 
 	return nil
+}
+
+type MetricsExponentialHistogramRecord struct {
+	MetricsRecordBase
+	Count                uint64   `json:"count"`
+	Sum                  float64  `json:"sum"`
+	Scale                int32    `json:"scale"`
+	ZeroCount            uint64   `json:"zeroCount"`
+	PositiveOffset       int32    `json:"positiveOffset"`
+	PositiveBucketCounts []uint64 `json:"positiveBucketCounts"`
+	NegativeOffset       int32    `json:"negativeOffset"`
+	NegativeBucketCounts []uint64 `json:"negativeBucketCounts"`
+	Min                  float64  `json:"min"`
+	Max                  float64  `json:"max"`
+}
+
+func QueryMetricsExponentialHistogram(ctx context.Context, db *sql.DB) ([]MetricsExponentialHistogramRecord, error) {
+	rows, err := db.QueryContext(ctx, queryMetricsExponentialHistogramSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]MetricsExponentialHistogramRecord, 0)
+
+	for rows.Next() {
+		var result MetricsExponentialHistogramRecord
+
+		var timestamp time.Time
+
+		var positiveBucketCounts duckdb.Composite[[]uint64]
+		var negativeBucketCounts duckdb.Composite[[]uint64]
+
+		err := rows.Scan(
+			&timestamp,
+			&result.ServiceName,
+			&result.MetricName,
+			&result.MetricDescription,
+			&result.MetricUnit,
+			&result.ResourceAttributes,
+			&result.ScopeName,
+			&result.ScopeVersion,
+			&result.Attributes,
+			&result.Count,
+			&result.Sum,
+			&result.Scale,
+			&result.ZeroCount,
+			&result.PositiveOffset,
+			&positiveBucketCounts,
+			&result.NegativeOffset,
+			&negativeBucketCounts,
+			&result.Min,
+			&result.Max,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// convert timestamp to unix epoch in microseconds
+		result.Timestamp = timestamp.UnixMicro()
+
+		result.PositiveBucketCounts = positiveBucketCounts.Get()
+		result.NegativeBucketCounts = negativeBucketCounts.Get()
+
+		results = append(results, result)
+	}
+
+	return results, nil
 }

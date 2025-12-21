@@ -81,6 +81,71 @@ func (s WebService) getTracesHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
+func (s WebService) getMetricsGaugeHandler(w http.ResponseWriter, r *http.Request) {
+	res, err := storage.QueryMetricsGauge(s.ctx, s.db)
+	if err != nil {
+		w.Header().Set("Content-Type", webDefaultContentType)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", webDefaultContentType)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(res)
+}
+
+func (s WebService) getMetricsSumHandler(w http.ResponseWriter, r *http.Request) {
+	res, err := storage.QueryMetricsSum(s.ctx, s.db)
+	if err != nil {
+		w.Header().Set("Content-Type", webDefaultContentType)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", webDefaultContentType)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(res)
+}
+
+func (s WebService) getMetricsHistogramHandler(w http.ResponseWriter, r *http.Request) {
+	res, err := storage.QueryMetricsHistogram(s.ctx, s.db)
+	if err != nil {
+		w.Header().Set("Content-Type", webDefaultContentType)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", webDefaultContentType)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(res)
+}
+
+func (s WebService) getMetricsExponentialHistogramHandler(w http.ResponseWriter, r *http.Request) {
+	res, err := storage.QueryMetricsExponentialHistogram(s.ctx, s.db)
+	if err != nil {
+		w.Header().Set("Content-Type", webDefaultContentType)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", webDefaultContentType)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(res)
+}
+
+func (s WebService) getMetricsSummaryHandler(w http.ResponseWriter, r *http.Request) {
+	res, err := storage.QueryMetricsSummary(s.ctx, s.db)
+	if err != nil {
+		w.Header().Set("Content-Type", webDefaultContentType)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", webDefaultContentType)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(res)
+}
+
 func (s WebService) jaegerServices(w http.ResponseWriter, r *http.Request) {
 	data, err := storage.GetServices(s.ctx, s.db)
 	if jaegerHandleError(w, err, http.StatusInternalServerError) {
@@ -365,6 +430,11 @@ func StartWebApp(ctx context.Context, db *sql.DB, addr string) error {
 	mux.HandleFunc("GET /api/v1/healthz", s.getHealthzHandler)
 	mux.HandleFunc("GET /api/v1/logs", s.getLogsHandler)
 	mux.HandleFunc("GET /api/v1/traces", s.getTracesHandler)
+	mux.HandleFunc("GET /api/v1/metrics/gauge", s.getMetricsGaugeHandler)
+	mux.HandleFunc("GET /api/v1/metrics/sum", s.getMetricsSumHandler)
+	mux.HandleFunc("GET /api/v1/metrics/histogram", s.getMetricsHistogramHandler)
+	mux.HandleFunc("GET /api/v1/metrics/exponential-histogram", s.getMetricsExponentialHistogramHandler)
+	mux.HandleFunc("GET /api/v1/metrics/summary", s.getMetricsSummaryHandler)
 
 	// Jaeger Query Internal HTTP API
 	// Ref: https://www.jaegertracing.io/docs/2.9/architecture/apis/#internal-http-json
