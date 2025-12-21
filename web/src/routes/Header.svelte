@@ -17,6 +17,10 @@
 			exact: false
 		},
 		{
+			path: '#/metrics',
+			title: 'Metrics'
+		},
+		{
 			path: '#/about',
 			title: 'About'
 		}
