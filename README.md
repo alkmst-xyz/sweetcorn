@@ -51,6 +51,7 @@ docker compose up -d
 - [ ] Explore compression:
   - DuckDB has built-in compression with lightweight compression algorithms.
   - Validate compression is working.
+- [ ] User defined functions, specific to o11ty.
 
 ### Development
 
