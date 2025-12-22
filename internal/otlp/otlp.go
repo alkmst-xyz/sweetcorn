@@ -8,6 +8,7 @@ import (
 
 	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/pdata/plog/plogotlp"
+	"go.opentelemetry.io/collector/pdata/pmetric/pmetricotlp"
 	"go.opentelemetry.io/collector/pdata/ptrace/ptraceotlp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -90,6 +91,32 @@ func (r *TracesGRPCService) Export(ctx context.Context, req ptraceotlp.ExportReq
 }
 
 //
+// Metrics
+//
+
+type MetricsGRPCService struct {
+	pmetricotlp.UnimplementedGRPCServer
+	ctx context.Context
+	db  *sql.DB
+}
+
+func (r *MetricsGRPCService) Export(ctx context.Context, req pmetricotlp.ExportRequest) (pmetricotlp.ExportResponse, error) {
+	md := req.Metrics()
+	dataPointCount := md.DataPointCount()
+	if dataPointCount == 0 {
+		return pmetricotlp.NewExportResponse(), nil
+	}
+
+	err := storage.IngestMetricsData(r.ctx, r.db, md)
+	if err != nil {
+		log.Fatalf("Failed to write metrics to db: %v", err)
+		return pmetricotlp.NewExportResponse(), GetStatusFromError(err)
+	}
+
+	return pmetricotlp.NewExportResponse(), nil
+}
+
+//
 // Main
 //
 
@@ -102,6 +129,10 @@ func StartGRPCServer(ctx context.Context, db *sql.DB, addr string) error {
 		ctx: ctx,
 		db:  db,
 	}
+	metricsService := &MetricsGRPCService{
+		ctx: ctx,
+		db:  db,
+	}
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -111,6 +142,7 @@ func StartGRPCServer(ctx context.Context, db *sql.DB, addr string) error {
 	server := grpc.NewServer()
 	plogotlp.RegisterGRPCServer(server, logsService)
 	ptraceotlp.RegisterGRPCServer(server, tracesService)
+	pmetricotlp.RegisterGRPCServer(server, metricsService)
 	reflection.Register(server)
 
 	log.Printf("GRPC server listening on %s", lis.Addr())
