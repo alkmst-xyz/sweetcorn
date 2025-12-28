@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-
-	_ "github.com/duckdb/duckdb-go/v2"
 )
 
 type StorageType string
@@ -17,9 +15,16 @@ const (
 	DuckLake StorageType = "ducklake"
 )
 
-type Config struct {
-	StorageType    StorageType
+type Storage struct {
+	Type           StorageType
 	DataSourceName string
+	DB             *sql.DB
+}
+
+type StorageConfig struct {
+	StorageType StorageType
+	DataDir     string
+	DBName      string
 }
 
 func openDuckDB(dsn string) (*sql.DB, error) {
@@ -38,42 +43,92 @@ func createDataDir(dataDir string) error {
 	return nil
 }
 
-func (cfg *Config) initDB(ctx context.Context) (*sql.DB, error) {
-	switch cfg.StorageType {
-	case DuckDB:
-		err := createDataDir(".sweetcorn_data") // TODO: get path from config
-		if err != nil {
-			return nil, err
-		}
+type StorageBackend interface {
+	init(ctx context.Context, dsn string) (*sql.DB, error)
+}
 
-		db, err := openDuckDB(cfg.DataSourceName)
-		if err != nil {
-			return nil, err
-		}
+type DuckDBBackend struct{}
 
-		log.Printf("Connected to DuckDB at %s", cfg.DataSourceName)
-
-		return db, nil
-
-	case DuckLake:
-		db, err := openDuckDB("") // create in-memory instance
-		if err != nil {
-			return nil, err
-		}
-
-		err = SetupDuckLake(ctx, cfg, db)
-		if err != nil {
-			return nil, fmt.Errorf("failed to setup ducklake: %w", err)
-		}
-
-		log.Printf("Connected to DuckLake")
-
-		return db, nil
-
-	default:
-		return nil, fmt.Errorf("unknown storage type: %s", cfg.StorageType)
+func (cfg DuckDBBackend) init(ctx context.Context, dsn string) (*sql.DB, error) {
+	db, err := sql.Open("duckdb", dsn)
+	if err != nil {
+		return nil, err
 	}
 
+	createTables(ctx, db)
+
+	return db, nil
+}
+
+type DuckLakeBackend struct{}
+
+func (cfg DuckLakeBackend) init(ctx context.Context, dsn string) (*sql.DB, error) {
+	db, err := sql.Open("duckdb", dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	setupDuckLake(ctx, db)
+	createTables(ctx, db)
+
+	return db, nil
+}
+
+func getStorageBackend(storageType StorageType) (StorageBackend, error) {
+	switch storageType {
+	case DuckDB:
+		return DuckDBBackend{}, nil
+
+	case DuckLake:
+		return DuckLakeBackend{}, nil
+
+	default:
+		return nil, fmt.Errorf("unknown storage type: %s", storageType)
+	}
+
+}
+
+func NewStorage(ctx context.Context, cfg StorageConfig) (*Storage, error) {
+	err := createDataDir(cfg.DataDir)
+	if err != nil {
+		return nil, err
+	}
+
+	backend, err := getStorageBackend(cfg.StorageType)
+	if err != nil {
+		return nil, err
+	}
+
+	dsn := fmt.Sprintf("%s/%s", cfg.DataDir, cfg.DBName)
+	db, err := backend.init(ctx, dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Printf("Connected to DuckDB at %s", dsn)
+	log.Printf("Storage initialized with storageType=%s", cfg.StorageType)
+
+	return &Storage{DB: db}, nil
+}
+
+// Close storage connection.
+func (s *Storage) Close() error {
+	log.Printf("Closing storage connection.")
+
+	if err := s.DB.Close(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func execQueries(ctx context.Context, db *sql.DB, queries []string) error {
+	for _, query := range queries {
+		if _, err := db.ExecContext(ctx, query); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Create all tables used by sweetcorn
@@ -86,8 +141,8 @@ func (cfg *Config) initDB(ctx context.Context) (*sql.DB, error) {
 // otel_metrics_histogram
 // otel_metrics_exponential_histogram
 // otel_metrics_summary
-func createTables(cfg *Config, ctx context.Context, db *sql.DB) error {
-	tablesConfig := []string{
+func createTables(ctx context.Context, db *sql.DB) error {
+	var createTableQueries = []string{
 		createLogsTableSQL,
 		createTracesTableSQL,
 		createMetricsGaugeTable,
@@ -97,26 +152,18 @@ func createTables(cfg *Config, ctx context.Context, db *sql.DB) error {
 		createMetricsSummaryTable,
 	}
 
-	for _, tblDDL := range tablesConfig {
-		if _, err := db.ExecContext(ctx, tblDDL); err != nil {
-			return fmt.Errorf("failed to create table: %w", err)
-		}
-	}
-
-	return nil
+	return execQueries(ctx, db, createTableQueries)
 }
 
-// TODO: re-consider accepting ctx from parent
-func (cfg *Config) NewStorage(ctx context.Context) (*sql.DB, error) {
-	db, err := cfg.initDB(ctx)
-	if err != nil {
-		return nil, err
+func setupDuckLake(ctx context.Context, db *sql.DB) error {
+	var duckLakeSetupQueries = []string{
+		installDuckLakeSQL,
+		installPostgresSQL,
+		createS3SecretSQL,
+		createPostgresSecretSQL,
+		attachDuckLakeSQL,
+		useDuckLakeSQL,
 	}
 
-	err = createTables(cfg, ctx, db)
-	if err != nil {
-		return nil, err
-	}
-
-	return db, nil
+	return execQueries(ctx, db, duckLakeSetupQueries)
 }

@@ -317,7 +317,7 @@ func convertLinks(links ptrace.SpanLinkSlice) (traceIDs, spanIDs, states, attrs 
 	return
 }
 
-func CreateTracesTable(ctx context.Context, cfg *Config, db *sql.DB) error {
+func CreateTracesTable(ctx context.Context, cfg *Storage, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, createTracesTableSQL); err != nil {
 		return fmt.Errorf("exec create traces table sql: %w", err)
 	}

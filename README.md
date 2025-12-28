@@ -20,6 +20,12 @@ docker compose up -d
 | Grafana      | http://localhost:3000  |
 | HotROD       | http://localhost:8080  |
 
+## TODO
+
+- [ ] Use `*storage.Storage` as data interface instead of `*sql.DB`.
+- [ ] Remove golang workspaces
+- [ ] Move demo to examples
+
 ## Features
 
 - [x] Logs
@@ -41,7 +47,8 @@ docker compose up -d
 - [x] Basic GRPC server
 - [x] Handle protobuf payload
 - [x] Handle JSON payload in HTTP
-- [ ] Docker Image
+- [x] Docker Image
+- [ ] Use `zap` logger.
 - [ ] ~~Exporter for open telemetry collector~~: not planned for v0.1.0.
 - [ ] TTL for rows (duck db does not provide it)
   - Table specific TTL configuration

@@ -100,7 +100,7 @@ type LogRecord struct {
 	EventName          string         `json:"eventName"`
 }
 
-func CreateLogsTable(ctx context.Context, cfg *Config, db *sql.DB) error {
+func CreateLogsTable(ctx context.Context, cfg *Storage, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, createLogsTableSQL); err != nil {
 		return fmt.Errorf("exec create logs table sql: %w", err)
 	}

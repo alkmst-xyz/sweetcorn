@@ -12,8 +12,8 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
 )
 
-func withTestDB(t *testing.T, fn func(ctx context.Context, cfg *Config, db *sql.DB)) {
-	cfg := &Config{
+func withTestDB(t *testing.T, fn func(ctx context.Context, cfg *Storage, db *sql.DB)) {
+	cfg := &Storage{
 		DataSourceName: "",
 	}
 
@@ -82,7 +82,7 @@ func TestQueryLogs_WithoutTable(t *testing.T) {
 }
 
 func TestInsertLogsData(t *testing.T) {
-	withTestDB(t, func(ctx context.Context, cfg *Config, db *sql.DB) {
+	withTestDB(t, func(ctx context.Context, cfg *Storage, db *sql.DB) {
 		logs := generateSampleLogs(1)
 
 		if err := InsertLogsData(ctx, db, logs); err != nil {
@@ -92,7 +92,7 @@ func TestInsertLogsData(t *testing.T) {
 }
 
 func TestInsertLogsDataAndQuery(t *testing.T) {
-	withTestDB(t, func(ctx context.Context, cfg *Config, db *sql.DB) {
+	withTestDB(t, func(ctx context.Context, cfg *Storage, db *sql.DB) {
 		numLogs := 10
 		logs := generateSampleLogs(numLogs)
 
@@ -118,7 +118,7 @@ func TestInsertLogsDataAndQuery(t *testing.T) {
 }
 
 func InsertLogsDataWithEmptyAttributes(t *testing.T) {
-	withTestDB(t, func(ctx context.Context, cfg *Config, db *sql.DB) {
+	withTestDB(t, func(ctx context.Context, cfg *Storage, db *sql.DB) {
 		numLogs := 1
 		logs := generateSampleLogs(numLogs)
 

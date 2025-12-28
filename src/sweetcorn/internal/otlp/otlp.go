@@ -2,7 +2,6 @@ package otlp
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"net"
 
@@ -44,8 +43,8 @@ func GetStatusFromError(err error) error {
 
 type LogsGRPCService struct {
 	plogotlp.UnimplementedGRPCServer
-	ctx context.Context
-	db  *sql.DB
+	ctx     context.Context
+	storage *storage.Storage
 }
 
 func (r *LogsGRPCService) Export(ctx context.Context, req plogotlp.ExportRequest) (plogotlp.ExportResponse, error) {
@@ -55,7 +54,7 @@ func (r *LogsGRPCService) Export(ctx context.Context, req plogotlp.ExportRequest
 		return plogotlp.NewExportResponse(), nil
 	}
 
-	err := storage.InsertLogsData(r.ctx, r.db, ld)
+	err := storage.InsertLogsData(r.ctx, r.storage.DB, ld)
 	if err != nil {
 		log.Fatalf("Failed to write logs to db: %v", err)
 		return plogotlp.NewExportResponse(), GetStatusFromError(err)
@@ -70,8 +69,8 @@ func (r *LogsGRPCService) Export(ctx context.Context, req plogotlp.ExportRequest
 
 type TracesGRPCService struct {
 	ptraceotlp.UnimplementedGRPCServer
-	ctx context.Context
-	db  *sql.DB
+	ctx     context.Context
+	storage *storage.Storage
 }
 
 func (r *TracesGRPCService) Export(ctx context.Context, req ptraceotlp.ExportRequest) (ptraceotlp.ExportResponse, error) {
@@ -81,7 +80,7 @@ func (r *TracesGRPCService) Export(ctx context.Context, req ptraceotlp.ExportReq
 		return ptraceotlp.NewExportResponse(), nil
 	}
 
-	err := storage.InsertTracesData(r.ctx, r.db, td)
+	err := storage.InsertTracesData(r.ctx, r.storage.DB, td)
 	if err != nil {
 		log.Fatalf("Failed to write traces to db: %v", err)
 		return ptraceotlp.NewExportResponse(), GetStatusFromError(err)
@@ -96,8 +95,8 @@ func (r *TracesGRPCService) Export(ctx context.Context, req ptraceotlp.ExportReq
 
 type MetricsGRPCService struct {
 	pmetricotlp.UnimplementedGRPCServer
-	ctx context.Context
-	db  *sql.DB
+	ctx     context.Context
+	storage *storage.Storage
 }
 
 func (r *MetricsGRPCService) Export(ctx context.Context, req pmetricotlp.ExportRequest) (pmetricotlp.ExportResponse, error) {
@@ -107,7 +106,7 @@ func (r *MetricsGRPCService) Export(ctx context.Context, req pmetricotlp.ExportR
 		return pmetricotlp.NewExportResponse(), nil
 	}
 
-	err := storage.IngestMetricsData(r.ctx, r.db, md)
+	err := storage.IngestMetricsData(r.ctx, r.storage.DB, md)
 	if err != nil {
 		log.Fatalf("Failed to write metrics to db: %v", err)
 		return pmetricotlp.NewExportResponse(), GetStatusFromError(err)
@@ -120,18 +119,18 @@ func (r *MetricsGRPCService) Export(ctx context.Context, req pmetricotlp.ExportR
 // Main
 //
 
-func StartGRPCServer(ctx context.Context, db *sql.DB, addr string) error {
+func StartGRPCServer(ctx context.Context, storage *storage.Storage, addr string) error {
 	logsService := &LogsGRPCService{
-		ctx: ctx,
-		db:  db,
+		ctx:     ctx,
+		storage: storage,
 	}
 	tracesService := &TracesGRPCService{
-		ctx: ctx,
-		db:  db,
+		ctx:     ctx,
+		storage: storage,
 	}
 	metricsService := &MetricsGRPCService{
-		ctx: ctx,
-		db:  db,
+		ctx:     ctx,
+		storage: storage,
 	}
 
 	lis, err := net.Listen("tcp", addr)
