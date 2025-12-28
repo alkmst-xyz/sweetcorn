@@ -13,8 +13,8 @@ import (
 
 	"github.com/rs/cors"
 
-	"github.com/alkmst-xyz/sweetcorn/internal/storage"
-	"github.com/alkmst-xyz/sweetcorn/web"
+	"github.com/alkmst-xyz/sweetcorn/sweetcorn/internal/storage"
+	"github.com/alkmst-xyz/sweetcorn/sweetcorn/internal/web"
 )
 
 const webDefaultContentType = "application/json"

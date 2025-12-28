@@ -1,15 +1,12 @@
 # sweetcorn Makefile
 
-# Project information
-PROJECT_NAME := sweetcorn
-
 # Build configuration
-BUILD_DIR := build
+BUILD_DIR := ./build
 BIN_DIR := $(BUILD_DIR)/bin
 COVERAGE_DIR := $(BUILD_DIR)/coverage
 
-# Binary names
-SWEETCORN_BIN := $(BIN_DIR)/sweetcorn
+DIR_SWEETCORN := ./src/sweetcorn
+DIR_DEMO := ./src/demo
 
 ###############################################################################
 # Default Target
@@ -17,7 +14,7 @@ SWEETCORN_BIN := $(BIN_DIR)/sweetcorn
 
 .PHONY: help
 help:
-	@echo "$(PROJECT_NAME) Makefile"
+	@echo "sweetcorn Makefile"
 	@echo ""
 	@echo "Usage:"
 	@echo "  make [target]"
@@ -34,14 +31,14 @@ dev-setup: ## Setup development environment
 .PHONY: deps
 deps: ## Download and tidy dependencies
 	@echo "[INFO] Downloading dependencies..."
-	go mod download
-	go mod tidy
+	cd $(DIR_SWEETCORN) && go mod download
+	cd $(DIR_SWEETCORN) && go mod tidy
 
 .PHONY: deps-update
 deps-update: ## Update all dependencies to latest versions
 	@echo "[INFO] Updating dependencies to latest versions..."
-	go get -u -t ./...
-	go mod tidy
+	cd $(DIR_SWEETCORN) && go get -u -t ./...
+	cd $(DIR_SWEETCORN) && go mod tidy
 
 .PHONY: dev-tools
 dev-tools: ## Install development tools
@@ -52,39 +49,62 @@ dev-tools: ## Install development tools
 .PHONY: install-ui-deps
 install-ui-deps:
 	@echo "[INFO] Installing UI dependencies..."
-	@cd web && pnpm install
+	@fnm use && pnpm install
 
 ###############################################################################
-# Building
+# Build
 ###############################################################################
-
-.PHONY: build
-build: dev-setup ## Build sweetcorn binary
-	@echo "[INFO] Building sweetcorn..."
-	go build \
-		-o $(SWEETCORN_BIN) \
-		cmd/sweetcorn/main.go
 
 # Build UI
 .PHONY: build-ui
 build-ui:
 	@echo "[INFO] Building sweetcorn UI..."
-	@cd web && pnpm build
+	@fnm use && pnpm --filter sweetcorn-ui run build
+	@echo "[INFO] Copying web assets..."
+	@cp -r ./src/sweetcorn-ui/build ./src/sweetcorn/internal/web/build
+
+# Build sweetcorn
+.PHONY: build
+build: dev-setup build-ui
+	@echo "[INFO] Building sweetcorn..."
+	go build -o $(BIN_DIR) $(DIR_SWEETCORN)
+
+# Build demo
+.PHONY: build-demo
+build-demo: dev-setup
+	@echo "[INFO] Building demo..."
+	go build -o $(BIN_DIR) $(DIR_DEMO)
+
+###############################################################################
+# Run
+###############################################################################
+
+# Build and run sweetcorn
+.PHONY: run
+run: build
+	@echo "[INFO] Starting sweetcorn..."
+	$(BIN_DIR)/sweetcorn
+
+# Build and run demo
+.PHONY: run-demo
+run-demo: build-demo
+	@echo "[INFO] Starting demo..."	
+	OTEL_RESOURCE_ATTRIBUTES="service.name=dice,service.version=0.1.0" $(BIN_DIR)/demo
 
 ###############################################################################
 # Testing
 ###############################################################################
-	
+
 .PHONY: test
 test: dev-setup ## Run all tests
 	@echo "[INFO] Running tests..."
-	go test -v ./...
+	cd $(DIR_SWEETCORN) && go test -v ./...
 
 .PHONY: test-coverage
 test-coverage: dev-setup ## Run all tests with coverage
 	@echo "[INFO] Running tests with coverage..."
-	go test -v -coverprofile $(COVERAGE_DIR)/coverage.out ./...
-	go tool cover -html $(COVERAGE_DIR)/coverage.out -o $(COVERAGE_DIR)/coverage.html
+	cd $(DIR_SWEETCORN) && go test -v -coverprofile ../../$(COVERAGE_DIR)/coverage.out ./...
+	cd $(DIR_SWEETCORN) && go tool cover -html ../../$(COVERAGE_DIR)/coverage.out -o ../../$(COVERAGE_DIR)/coverage.html
 
 ###############################################################################
 # Linting and Code Quality
@@ -93,17 +113,17 @@ test-coverage: dev-setup ## Run all tests with coverage
 .PHONY: fmt
 fmt: ## Format code
 	@echo "[INFO] Formatting code..."
-	go fmt ./...
+	cd $(DIR_SWEETCORN) && go fmt ./...
 
 .PHONY: vet
 vet: ## Run go vet
 	@echo "[INFO] Running go vet..."
-	go vet ./...
+	cd $(DIR_SWEETCORN) && go vet ./...
 
 .PHONY: mod-verify
 mod-verify: ## Verify module dependencies
 	@echo "[INFO] Verifying module dependencies..."
-	go mod verify
+	cd $(DIR_SWEETCORN) && go mod verify
 
 ###############################################################################
 # CI/CD
@@ -126,13 +146,20 @@ clean: ## Clean build artifacts
 # Development
 ###############################################################################
 
-.PHONY: run
-run: build ## Run the server
-	@echo "[INFO] Starting sweetcorn..."
-	$(SWEETCORN_BIN)
+# Run sweetcorn
+.PHONY: dev-sweetcorn
+dev-sweetcorn:
+	@echo "[INFO] Running sweetcorn..."
+	go run ./src/sweetcorn
+
+# Run demo
+.PHONY: dev-demo
+dev-demo:
+	@echo "[INFO] Starting demo..."	
+	OTEL_RESOURCE_ATTRIBUTES="service.name=dice,service.version=0.1.0" go run ./src/sweetcorn
 
 # Run the frontend server in development mode.
-.PHONY: run-ui
-run-ui:
+.PHONY: dev-ui
+dev-ui:
 	@echo "[INFO] Running frontend..."
-	@cd web && fnm use && pnpm dev
+	@fnm use && pnpm --filter sweetcorn-ui run dev
