@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
-	"os"
 
 	_ "github.com/duckdb/duckdb-go/v2"
 	"golang.org/x/sync/errgroup"
@@ -15,27 +15,23 @@ import (
 )
 
 func main() {
+	storageType := flag.String("storage-type", "duckdb", "storage type")
+	dsn := flag.String("dsn", ".sweetcorn_data/main.db", "data source name")
+	flag.Parse()
+
 	cfg := &storage.Config{
-		DataSourceName: ".sweetcorn_data/main.db",
+		StorageType:    storage.StorageType(*storageType),
+		DataSourceName: *dsn,
 	}
-
-	// create data dir
-	err := os.MkdirAll(".sweetcorn_data", 0755)
-	if err != nil {
-		log.Fatalf("Failed to create sweetcorn data dir: %s", err)
-	}
-
-	db, err := cfg.OpenDB()
-	if err != nil {
-		log.Fatalf("Failed to open DB: %v", err)
-	}
-	defer db.Close()
 
 	ctx := context.Background()
 
-	if err := storage.InitStorage(ctx, cfg, db); err != nil {
+	// create storage
+	db, err := cfg.NewStorage(ctx)
+	if err != nil {
 		log.Fatalf("Failed to initialize storage: %v", err)
 	}
+	defer db.Close()
 
 	// start servers
 	const httpAddr = ":4318"

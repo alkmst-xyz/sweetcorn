@@ -5,6 +5,7 @@ import (
 	"database/sql"
 )
 
+// TODO: replace hardcoded config with templating
 const (
 	setupDuckLakeSQL = `
 INSTALL ducklake;

@@ -17,7 +17,7 @@ func withTestDB(t *testing.T, fn func(ctx context.Context, cfg *Config, db *sql.
 		DataSourceName: "",
 	}
 
-	db, err := cfg.OpenDB()
+	db, err := openDuckDB(cfg.DataSourceName)
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
@@ -62,22 +62,14 @@ func generateSampleLogs(count int) plog.Logs {
 }
 
 func TestOpenDB_InvalidDSN(t *testing.T) {
-	cfg := &Config{
-		DataSourceName: "invalid:://path",
-	}
-
-	_, err := cfg.OpenDB()
+	_, err := openDuckDB("invalid:://path")
 	if err == nil {
 		t.Fatal("expected error for invalid DSN")
 	}
 }
 
 func TestQueryLogs_WithoutTable(t *testing.T) {
-	cfg := &Config{
-		DataSourceName: "",
-	}
-
-	db, err := cfg.OpenDB()
+	db, err := openDuckDB("")
 	if err != nil {
 		t.Fatalf("failed to open DB: %v", err)
 	}

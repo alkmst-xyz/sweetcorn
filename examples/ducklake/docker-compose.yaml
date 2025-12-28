@@ -11,6 +11,7 @@ services:
     depends_on:
       - sweetcorn-ducklake-postgres
       - sweetcorn-ducklake-minio
+    command: ["bin/sweetcorn", "--storage-type", "ducklake", "--dsn", ""]
     networks:
       - sweetcorn-ducklake-net
 
