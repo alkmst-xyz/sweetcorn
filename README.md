@@ -7,7 +7,7 @@ A DuckDB backend for OpenTelemetry data.
 ## Quick start
 
 ```bash
-cd example
+cd examples/example
 docker compose up -d
 ```
 
@@ -52,6 +52,19 @@ docker compose up -d
   - DuckDB has built-in compression with lightweight compression algorithms.
   - Validate compression is working.
 - [ ] User defined functions, specific to o11ty.
+- [ ] Create real world demo application (like HotROD).
+  - [x] Logs
+  - [x] Traces
+  - [x] Metrics
+  - [ ] Exemplars
+  - [ ] Serve simple web UI
+  - [ ] Move to `cmd/demo`
+- [ ] Blue/green deployment example
+  - Demo -> OTEL collector
+  - OTEL collector -> Loki + Prometheus + Jaeger
+  - OTEL collector -> Sweetcorn (+ Postgres, MinIO)
+  - Visualize with Grafana
+  - Consider comparing with Grafana stack (alloy+loki+mimir+tempo).
 
 ### Development
 
