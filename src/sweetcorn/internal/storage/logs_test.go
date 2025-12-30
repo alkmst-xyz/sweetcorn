@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 	"time"
 
@@ -12,24 +11,26 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.34.0"
 )
 
-func withTestDB(t *testing.T, fn func(ctx context.Context, cfg *Storage, db *sql.DB)) {
-	cfg := &Storage{
-		DataSourceName: "",
+func withTestDB(t *testing.T, fn func(ctx context.Context, s *Storage)) {
+	ctx := context.Background()
+	cfg := StorageConfig{
+		StorageType:                      DuckDB,
+		DataDir:                          ".sweetcorn_data",
+		LogsTable:                        DefaultLogsTableName,
+		TracesTable:                      DefaultTracesTableName,
+		MetricsSumTable:                  DefaultMetricsSumTableName,
+		MetricsGaugeTable:                DefaultMetricsGaugeTableName,
+		MetricsHistogramTable:            DefaultMetricsHistogramTableName,
+		MetricsExponentialHistogramTable: DefaultMetricsExponentialHistogramTableName,
+		MetricsSummaryTable:              DefaultMetricsSummaryTableName,
 	}
 
-	db, err := openDuckDB(cfg.DataSourceName)
+	s, err := NewStorage(ctx, cfg)
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
 
-	ctx := context.Background()
-
-	if err := CreateLogsTable(ctx, cfg, db); err != nil {
-		t.Fatalf("failed to create table: %v", err)
-	}
-
-	fn(ctx, cfg, db)
+	fn(ctx, s)
 }
 
 func generateSampleLogs(count int) plog.Logs {
@@ -68,39 +69,26 @@ func TestOpenDB_InvalidDSN(t *testing.T) {
 	}
 }
 
-func TestQueryLogs_WithoutTable(t *testing.T) {
-	db, err := openDuckDB("")
-	if err != nil {
-		t.Fatalf("failed to open DB: %v", err)
-	}
-	defer db.Close()
-
-	_, err = QueryLogs(context.Background(), db)
-	if err == nil {
-		t.Fatal("expected error querying non-existent table")
-	}
-}
-
 func TestInsertLogsData(t *testing.T) {
-	withTestDB(t, func(ctx context.Context, cfg *Storage, db *sql.DB) {
+	withTestDB(t, func(ctx context.Context, s *Storage) {
 		logs := generateSampleLogs(1)
 
-		if err := InsertLogsData(ctx, db, logs); err != nil {
+		if err := InsertLogsData(ctx, s.DB, s.InsertLogsSQL, logs); err != nil {
 			t.Fatalf("insertLog failed: %v", err)
 		}
 	})
 }
 
 func TestInsertLogsDataAndQuery(t *testing.T) {
-	withTestDB(t, func(ctx context.Context, cfg *Storage, db *sql.DB) {
+	withTestDB(t, func(ctx context.Context, s *Storage) {
 		numLogs := 10
 		logs := generateSampleLogs(numLogs)
 
-		if err := InsertLogsData(ctx, db, logs); err != nil {
+		if err := InsertLogsData(ctx, s.DB, s.InsertLogsSQL, logs); err != nil {
 			t.Fatalf("InsertLogsData failed: %v", err)
 		}
 
-		results, err := QueryLogs(ctx, db)
+		results, err := QueryLogs(ctx, s)
 		if err != nil {
 			t.Fatalf("QueryLogs failed: %v", err)
 		}
@@ -118,7 +106,7 @@ func TestInsertLogsDataAndQuery(t *testing.T) {
 }
 
 func InsertLogsDataWithEmptyAttributes(t *testing.T) {
-	withTestDB(t, func(ctx context.Context, cfg *Storage, db *sql.DB) {
+	withTestDB(t, func(ctx context.Context, s *Storage) {
 		numLogs := 1
 		logs := generateSampleLogs(numLogs)
 
@@ -130,11 +118,11 @@ func InsertLogsDataWithEmptyAttributes(t *testing.T) {
 		scopeLog.Scope().Attributes().Clear()
 		scopeLogRecords.Attributes().Clear()
 
-		if err := InsertLogsData(ctx, db, logs); err != nil {
+		if err := InsertLogsData(ctx, s.DB, s.InsertLogsSQL, logs); err != nil {
 			t.Fatalf("InsertLogsData failed: %v", err)
 		}
 
-		results, err := QueryLogs(ctx, db)
+		results, err := QueryLogs(ctx, s)
 		if err != nil {
 			t.Fatalf("QueryLogs failed: %v", err)
 		}

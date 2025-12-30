@@ -13,9 +13,11 @@ import (
 )
 
 const (
+	DefaultMetricsExponentialHistogramTableName = "otel_metrics_exponential_histogram"
+
 	createMetricsExponentialHistogramTable = `
 CREATE TABLE IF NOT EXISTS
-	otel_metrics_exponential_histogram (
+	%s (
 		timestamp				TIMESTAMP_NS,
 		service_name			VARCHAR,
 		metric_name				VARCHAR,
@@ -39,7 +41,7 @@ CREATE TABLE IF NOT EXISTS
 
 	insertMetricsExponentialHistogramSQL = `
 INSERT INTO
-	otel_metrics_exponential_histogram (
+	%s (
 		timestamp,
 		service_name,
 		metric_name,
@@ -85,7 +87,7 @@ SELECT
 	min,
 	max
 FROM
-	otel_metrics_exponential_histogram
+	%s
 ORDER BY
 	timestamp DESC
 LIMIT
@@ -189,8 +191,8 @@ type MetricsExponentialHistogramRecord struct {
 	Max                  float64  `json:"max"`
 }
 
-func QueryMetricsExponentialHistogram(ctx context.Context, db *sql.DB) ([]MetricsExponentialHistogramRecord, error) {
-	rows, err := db.QueryContext(ctx, queryMetricsExponentialHistogramSQL)
+func QueryMetricsExponentialHistogram(ctx context.Context, s *Storage) ([]MetricsExponentialHistogramRecord, error) {
+	rows, err := s.DB.QueryContext(ctx, renderQuery(queryMetricsExponentialHistogramSQL, s.Config.MetricsExponentialHistogramTable))
 	if err != nil {
 		return nil, err
 	}

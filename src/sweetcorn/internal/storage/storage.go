@@ -15,16 +15,24 @@ const (
 	DuckLake StorageType = "ducklake"
 )
 
-type Storage struct {
-	Type           StorageType
-	DataSourceName string
-	DB             *sql.DB
+type StorageConfig struct {
+	StorageType                      StorageType
+	DataDir                          string
+	DBName                           string
+	LogsTable                        string
+	TracesTable                      string
+	MetricsGaugeTable                string
+	MetricsSumTable                  string
+	MetricsHistogramTable            string
+	MetricsExponentialHistogramTable string
+	MetricsSummaryTable              string
 }
 
-type StorageConfig struct {
-	StorageType StorageType
-	DataDir     string
-	DBName      string
+type Storage struct {
+	Config          StorageConfig
+	DB              *sql.DB
+	InsertLogsSQL   string
+	InsertTracesSQL string
 }
 
 func openDuckDB(dsn string) (*sql.DB, error) {
@@ -44,32 +52,32 @@ func createDataDir(dataDir string) error {
 }
 
 type StorageBackend interface {
-	init(ctx context.Context, dsn string) (*sql.DB, error)
+	init(ctx context.Context, dsn string, cfg StorageConfig) (*sql.DB, error)
 }
 
 type DuckDBBackend struct{}
 
-func (cfg DuckDBBackend) init(ctx context.Context, dsn string) (*sql.DB, error) {
+func (b DuckDBBackend) init(ctx context.Context, dsn string, cfg StorageConfig) (*sql.DB, error) {
 	db, err := sql.Open("duckdb", dsn)
 	if err != nil {
 		return nil, err
 	}
 
-	createTables(ctx, db)
+	createTables(ctx, cfg, db)
 
 	return db, nil
 }
 
 type DuckLakeBackend struct{}
 
-func (cfg DuckLakeBackend) init(ctx context.Context, dsn string) (*sql.DB, error) {
+func (b DuckLakeBackend) init(ctx context.Context, dsn string, cfg StorageConfig) (*sql.DB, error) {
 	db, err := sql.Open("duckdb", dsn)
 	if err != nil {
 		return nil, err
 	}
 
 	setupDuckLake(ctx, db)
-	createTables(ctx, db)
+	createTables(ctx, cfg, db)
 
 	return db, nil
 }
@@ -99,8 +107,13 @@ func NewStorage(ctx context.Context, cfg StorageConfig) (*Storage, error) {
 		return nil, err
 	}
 
-	dsn := fmt.Sprintf("%s/%s", cfg.DataDir, cfg.DBName)
-	db, err := backend.init(ctx, dsn)
+	// Use in-memory DuckDB if name is empty.
+	dsn := ""
+	if cfg.DBName != "" {
+		dsn = fmt.Sprintf("%s/%s", cfg.DataDir, cfg.DBName)
+	}
+
+	db, err := backend.init(ctx, dsn, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +121,14 @@ func NewStorage(ctx context.Context, cfg StorageConfig) (*Storage, error) {
 	log.Printf("Connected to DuckDB at %s", dsn)
 	log.Printf("Storage initialized with storageType=%s", cfg.StorageType)
 
-	return &Storage{DB: db}, nil
+	s := &Storage{
+		Config:          cfg,
+		DB:              db,
+		InsertLogsSQL:   renderQuery(insertLogsSQL, cfg.LogsTable),
+		InsertTracesSQL: renderQuery(insertTracesSQL, cfg.TracesTable),
+	}
+
+	return s, nil
 }
 
 // Close storage connection.
@@ -141,15 +161,15 @@ func execQueries(ctx context.Context, db *sql.DB, queries []string) error {
 // otel_metrics_histogram
 // otel_metrics_exponential_histogram
 // otel_metrics_summary
-func createTables(ctx context.Context, db *sql.DB) error {
+func createTables(ctx context.Context, cfg StorageConfig, db *sql.DB) error {
 	var createTableQueries = []string{
-		createLogsTableSQL,
-		createTracesTableSQL,
-		createMetricsGaugeTable,
-		createMetricsSumTable,
-		createMetricsHistogramTable,
-		createMetricsExponentialHistogramTable,
-		createMetricsSummaryTable,
+		renderQuery(createLogsTableSQL, cfg.LogsTable),
+		renderQuery(createTracesTableSQL, cfg.TracesTable),
+		renderQuery(createMetricsGaugeTable, cfg.MetricsGaugeTable),
+		renderQuery(createMetricsSumTable, cfg.MetricsSumTable),
+		renderQuery(createMetricsHistogramTable, cfg.MetricsHistogramTable),
+		renderQuery(createMetricsExponentialHistogramTable, cfg.MetricsExponentialHistogramTable),
+		renderQuery(createMetricsSummaryTable, cfg.MetricsSummaryTable),
 	}
 
 	return execQueries(ctx, db, createTableQueries)

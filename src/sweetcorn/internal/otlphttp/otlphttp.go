@@ -263,7 +263,7 @@ func (s HTTPService) handleLogs(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = storage.InsertLogsData(s.ctx, s.storage.DB, otlpReq.Logs())
+	err = storage.InsertLogsData(s.ctx, s.storage.DB, s.storage.InsertLogsSQL, otlpReq.Logs())
 	if err != nil {
 		writeError(resp, enc, err, http.StatusInternalServerError)
 		return
@@ -298,7 +298,7 @@ func (s HTTPService) handleTraces(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = storage.InsertTracesData(s.ctx, s.storage.DB, otlpReq.Traces())
+	err = storage.InsertTracesData(s.ctx, s.storage.DB, s.storage.InsertTracesSQL, otlpReq.Traces())
 	if err != nil {
 		writeError(resp, enc, err, http.StatusInternalServerError)
 		return
@@ -333,7 +333,7 @@ func (s HTTPService) handleMetrics(resp http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	err = storage.IngestMetricsData(s.ctx, s.storage.DB, otlpReq.Metrics())
+	err = storage.IngestMetricsData(s.ctx, s.storage, otlpReq.Metrics())
 	if err != nil {
 		writeError(resp, enc, err, http.StatusInternalServerError)
 		return

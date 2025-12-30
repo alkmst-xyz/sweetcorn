@@ -12,9 +12,11 @@ import (
 )
 
 const (
+	DefaultMetricsSumTableName = "otel_metrics_sum"
+
 	createMetricsSumTable = `
 CREATE TABLE IF NOT EXISTS
-	otel_metrics_sum (
+	%s (
 		timestamp				TIMESTAMP_NS,
 		service_name			VARCHAR,
 		metric_name				VARCHAR,
@@ -31,7 +33,7 @@ CREATE TABLE IF NOT EXISTS
 
 	insertMetricsSumSQL = `
 INSERT INTO
-	otel_metrics_sum (
+	%s (
 		timestamp,
 		service_name,
 		metric_name,
@@ -63,7 +65,7 @@ SELECT
 	aggregation_temporality,
 	isMonotonic
 FROM
-	otel_metrics_sum
+	%s
 ORDER BY
 	timestamp DESC
 LIMIT
@@ -153,8 +155,8 @@ type MetricsSumRecord struct {
 	IsMonotonic            bool    `json:"isMonotonic"`
 }
 
-func QueryMetricsSum(ctx context.Context, db *sql.DB) ([]MetricsSumRecord, error) {
-	rows, err := db.QueryContext(ctx, queryMetricsSumSQL)
+func QueryMetricsSum(ctx context.Context, s *Storage) ([]MetricsSumRecord, error) {
+	rows, err := s.DB.QueryContext(ctx, renderQuery(queryMetricsSumSQL, s.Config.MetricsSumTable))
 	if err != nil {
 		return nil, err
 	}

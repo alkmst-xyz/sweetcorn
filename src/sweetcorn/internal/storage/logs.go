@@ -11,9 +11,11 @@ import (
 )
 
 const (
+	DefaultLogsTableName = "otel_logs"
+
 	createLogsTableSQL = `
 CREATE TABLE IF NOT EXISTS
-	otel_logs (
+	%s (
 		ts						TIMESTAMP_NS,
 		trace_id				VARCHAR,
 		span_id					VARCHAR,
@@ -34,7 +36,7 @@ CREATE TABLE IF NOT EXISTS
 
 	insertLogsSQL = `
 INSERT INTO
-	otel_logs (
+	%s (
 		ts,
 		trace_id,
 		span_id,
@@ -74,7 +76,7 @@ SELECT
 	log_attributes,
 	event_name
 FROM
-	otel_logs
+	%s
 ORDER BY
 	ts DESC
 LIMIT
@@ -100,59 +102,9 @@ type LogRecord struct {
 	EventName          string         `json:"eventName"`
 }
 
-func CreateLogsTable(ctx context.Context, cfg *Storage, db *sql.DB) error {
-	if _, err := db.ExecContext(ctx, createLogsTableSQL); err != nil {
-		return fmt.Errorf("exec create logs table sql: %w", err)
-	}
-	return nil
-}
-
-func QueryLogs(ctx context.Context, db *sql.DB) ([]LogRecord, error) {
-	rows, err := db.QueryContext(ctx, queryLogsSQL)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	results := make([]LogRecord, 0)
-
-	for rows.Next() {
-		var result LogRecord
-
-		var timestamp time.Time
-
-		err := rows.Scan(
-			&timestamp,
-			&result.TraceId,
-			&result.SpanId,
-			&result.TraceFlags,
-			&result.SeverityText,
-			&result.SeverityNumber,
-			&result.ServiceName,
-			&result.Body,
-			&result.ResourceSchemaUrl,
-			&result.ResourceAttributes,
-			&result.ScopeSchemaUrl,
-			&result.ScopeName,
-			&result.ScopeVersion,
-			&result.ScopeAttributes,
-			&result.LogAttributes,
-			&result.EventName,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		// convert timestamp to unix epoch in microseconds
-		result.Timestamp = timestamp.UnixMicro()
-
-		results = append(results, result)
-	}
-
-	return results, nil
-}
-
-func InsertLogsData(ctx context.Context, db *sql.DB, ld plog.Logs) error {
+// TODO: add storage as receiver
+// TODO: move db, insertSQL to storage receiver
+func InsertLogsData(ctx context.Context, db *sql.DB, insertLogsSQL string, ld plog.Logs) error {
 	rsLogs := ld.ResourceLogs()
 	for i := range rsLogs.Len() {
 		logs := rsLogs.At(i)
@@ -221,4 +173,49 @@ func InsertLogsData(ctx context.Context, db *sql.DB, ld plog.Logs) error {
 	}
 
 	return nil
+}
+
+func QueryLogs(ctx context.Context, s *Storage) ([]LogRecord, error) {
+	rows, err := s.DB.QueryContext(ctx, renderQuery(queryLogsSQL, s.Config.LogsTable))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]LogRecord, 0)
+
+	for rows.Next() {
+		var result LogRecord
+
+		var timestamp time.Time
+
+		err := rows.Scan(
+			&timestamp,
+			&result.TraceId,
+			&result.SpanId,
+			&result.TraceFlags,
+			&result.SeverityText,
+			&result.SeverityNumber,
+			&result.ServiceName,
+			&result.Body,
+			&result.ResourceSchemaUrl,
+			&result.ResourceAttributes,
+			&result.ScopeSchemaUrl,
+			&result.ScopeName,
+			&result.ScopeVersion,
+			&result.ScopeAttributes,
+			&result.LogAttributes,
+			&result.EventName,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// convert timestamp to unix epoch in microseconds
+		result.Timestamp = timestamp.UnixMicro()
+
+		results = append(results, result)
+	}
+
+	return results, nil
 }

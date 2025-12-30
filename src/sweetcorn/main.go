@@ -24,9 +24,16 @@ func main() {
 
 	// create storage
 	storageConfig := storage.StorageConfig{
-		StorageType: storage.StorageType(*storageType),
-		DataDir:     *dataDir,
-		DBName:      *dbName,
+		StorageType:                      storage.StorageType(*storageType),
+		DataDir:                          *dataDir,
+		DBName:                           *dbName,
+		LogsTable:                        storage.DefaultLogsTableName,
+		TracesTable:                      storage.DefaultTracesTableName,
+		MetricsSumTable:                  storage.DefaultMetricsSumTableName,
+		MetricsGaugeTable:                storage.DefaultMetricsGaugeTableName,
+		MetricsHistogramTable:            storage.DefaultMetricsHistogramTableName,
+		MetricsExponentialHistogramTable: storage.DefaultMetricsExponentialHistogramTableName,
+		MetricsSummaryTable:              storage.DefaultMetricsSummaryTableName,
 	}
 	storage, err := storage.NewStorage(ctx, storageConfig)
 	if err != nil {

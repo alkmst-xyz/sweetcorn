@@ -55,7 +55,7 @@ func (s WebService) getHealthzHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s WebService) getLogsHandler(w http.ResponseWriter, r *http.Request) {
-	res, err := storage.QueryLogs(s.ctx, s.storage.DB)
+	res, err := storage.QueryLogs(s.ctx, s.storage)
 	if err != nil {
 		w.Header().Set("Content-Type", webDefaultContentType)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -68,7 +68,7 @@ func (s WebService) getLogsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s WebService) getTracesHandler(w http.ResponseWriter, r *http.Request) {
-	res, err := storage.QueryTraces(s.ctx, s.storage.DB)
+	res, err := storage.QueryTraces(s.ctx, s.storage)
 	if err != nil {
 		w.Header().Set("Content-Type", webDefaultContentType)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -81,7 +81,7 @@ func (s WebService) getTracesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s WebService) getMetricsGaugeHandler(w http.ResponseWriter, r *http.Request) {
-	res, err := storage.QueryMetricsGauge(s.ctx, s.storage.DB)
+	res, err := storage.QueryMetricsGauge(s.ctx, s.storage)
 	if err != nil {
 		w.Header().Set("Content-Type", webDefaultContentType)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -94,7 +94,7 @@ func (s WebService) getMetricsGaugeHandler(w http.ResponseWriter, r *http.Reques
 }
 
 func (s WebService) getMetricsSumHandler(w http.ResponseWriter, r *http.Request) {
-	res, err := storage.QueryMetricsSum(s.ctx, s.storage.DB)
+	res, err := storage.QueryMetricsSum(s.ctx, s.storage)
 	if err != nil {
 		w.Header().Set("Content-Type", webDefaultContentType)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -107,7 +107,7 @@ func (s WebService) getMetricsSumHandler(w http.ResponseWriter, r *http.Request)
 }
 
 func (s WebService) getMetricsHistogramHandler(w http.ResponseWriter, r *http.Request) {
-	res, err := storage.QueryMetricsHistogram(s.ctx, s.storage.DB)
+	res, err := storage.QueryMetricsHistogram(s.ctx, s.storage)
 	if err != nil {
 		w.Header().Set("Content-Type", webDefaultContentType)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -120,7 +120,7 @@ func (s WebService) getMetricsHistogramHandler(w http.ResponseWriter, r *http.Re
 }
 
 func (s WebService) getMetricsExponentialHistogramHandler(w http.ResponseWriter, r *http.Request) {
-	res, err := storage.QueryMetricsExponentialHistogram(s.ctx, s.storage.DB)
+	res, err := storage.QueryMetricsExponentialHistogram(s.ctx, s.storage)
 	if err != nil {
 		w.Header().Set("Content-Type", webDefaultContentType)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -133,7 +133,7 @@ func (s WebService) getMetricsExponentialHistogramHandler(w http.ResponseWriter,
 }
 
 func (s WebService) getMetricsSummaryHandler(w http.ResponseWriter, r *http.Request) {
-	res, err := storage.QueryMetricsSummary(s.ctx, s.storage.DB)
+	res, err := storage.QueryMetricsSummary(s.ctx, s.storage)
 	if err != nil {
 		w.Header().Set("Content-Type", webDefaultContentType)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -146,7 +146,7 @@ func (s WebService) getMetricsSummaryHandler(w http.ResponseWriter, r *http.Requ
 }
 
 func (s WebService) jaegerServices(w http.ResponseWriter, r *http.Request) {
-	data, err := storage.GetServices(s.ctx, s.storage.DB)
+	data, err := storage.TraceServices(s.ctx, s.storage)
 	if jaegerHandleError(w, err, http.StatusInternalServerError) {
 		return
 	}
@@ -168,7 +168,7 @@ func (s WebService) jaegerOperations(w http.ResponseWriter, r *http.Request) {
 	}
 	spanKind := r.FormValue(jaegerSpanKindParam)
 
-	data, err := storage.TraceOperations(s.ctx, s.storage.DB, storage.TraceOperationsParams{
+	data, err := storage.TraceOperations(s.ctx, s.storage, storage.TraceOperationsParams{
 		ServiceName: service,
 		SpanKind:    spanKind,
 	})
@@ -189,7 +189,7 @@ func (s WebService) jaegerOperationsLegacy(w http.ResponseWriter, r *http.Reques
 	// Here we expect service name to not be empty because it the result of a path match.
 	service := r.PathValue(jaegerServiceParam)
 
-	data, err := storage.TraceOperations(s.ctx, s.storage.DB, storage.TraceOperationsParams{
+	data, err := storage.TraceOperations(s.ctx, s.storage, storage.TraceOperationsParams{
 		ServiceName: service,
 		SpanKind:    "",
 	})
@@ -252,7 +252,7 @@ func (s WebService) jaegerSearchTraces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := storage.SearchTraces(s.ctx, s.storage.DB, params)
+	data, err := storage.SearchTraces(s.ctx, s.storage, params)
 	if jaegerHandleError(w, err, http.StatusInternalServerError) {
 		return
 	}
@@ -350,7 +350,7 @@ func (s WebService) jaegerTrace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := storage.Trace(s.ctx, s.storage.DB, params)
+	data, err := storage.Trace(s.ctx, s.storage, params)
 
 	if errors.Is(err, storage.ErrTraceNotFound) {
 		jaegerHandleError(w, err, http.StatusNotFound)
@@ -397,7 +397,7 @@ func (s WebService) jaegerDependencies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := storage.Dependencies(s.ctx, s.storage.DB, params)
+	data, err := storage.Dependencies(s.ctx, s.storage, params)
 	if jaegerHandleError(w, err, http.StatusInternalServerError) {
 		return
 	}

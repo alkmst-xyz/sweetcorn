@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
+// TODO: not required
 var supportedMetricTypes = map[pmetric.MetricType]string{
 	pmetric.MetricTypeGauge:                createMetricsGaugeTable,
 	pmetric.MetricTypeSum:                  createMetricsSumTable,
@@ -50,13 +51,13 @@ type MetricsRecordBase struct {
 }
 
 // InsertMetrics insert metric data into duckdb concurrently
-func InsertMetrics(ctx context.Context, db *sql.DB, metricsMap map[pmetric.MetricType]MetricsModel) error {
+func InsertMetrics(ctx context.Context, s *Storage, metricsMap map[pmetric.MetricType]MetricsModel) error {
 	errsChan := make(chan error, len(supportedMetricTypes))
 	wg := &sync.WaitGroup{}
 	for _, m := range metricsMap {
 		wg.Add(1)
 		go func(m MetricsModel, wg *sync.WaitGroup) {
-			errsChan <- m.insert(ctx, db)
+			errsChan <- m.insert(ctx, s.DB)
 			wg.Done()
 		}(m, wg)
 	}
@@ -70,28 +71,30 @@ func InsertMetrics(ctx context.Context, db *sql.DB, metricsMap map[pmetric.Metri
 }
 
 // NewMetricsModel create a model for contain different metric data
-func NewMetricsModel() map[pmetric.MetricType]MetricsModel {
+func NewMetricsModel(s *Storage) map[pmetric.MetricType]MetricsModel {
 	return map[pmetric.MetricType]MetricsModel{
 		pmetric.MetricTypeGauge: &gaugeMetrics{
-			insertSQL: insertMetricsGaugeSQL,
+			insertSQL: renderQuery(insertMetricsGaugeSQL, s.Config.MetricsGaugeTable),
 		},
 		pmetric.MetricTypeSum: &sumMetrics{
-			insertSQL: insertMetricsSumSQL,
+			insertSQL: renderQuery(insertMetricsSumSQL, s.Config.MetricsSumTable),
 		},
 		pmetric.MetricTypeHistogram: &histogramMetrics{
-			insertSQL: insertMetricsHistogramSQL,
+			insertSQL: renderQuery(insertMetricsHistogramSQL, s.Config.MetricsHistogramTable),
 		},
 		pmetric.MetricTypeExponentialHistogram: &expHistogramMetrics{
-			insertSQL: insertMetricsExponentialHistogramSQL,
+			insertSQL: renderQuery(insertMetricsExponentialHistogramSQL, s.Config.MetricsExponentialHistogramTable),
 		},
 		pmetric.MetricTypeSummary: &summaryMetrics{
-			insertSQL: insertMetricsSummarySQL,
+			insertSQL: renderQuery(insertMetricsSummarySQL, s.Config.MetricsSummaryTable),
 		},
 	}
 }
 
-func IngestMetricsData(ctx context.Context, db *sql.DB, md pmetric.Metrics) error {
-	metricsMap := NewMetricsModel()
+func IngestMetricsData(ctx context.Context, s *Storage, md pmetric.Metrics) error {
+	// TODO: avoid creating here, can be attached to storage
+	metricsMap := NewMetricsModel(s)
+
 	for i := 0; i < md.ResourceMetrics().Len(); i++ {
 		metrics := md.ResourceMetrics().At(i)
 		resAttr := metrics.Resource().Attributes()
@@ -113,7 +116,7 @@ func IngestMetricsData(ctx context.Context, db *sql.DB, md pmetric.Metrics) erro
 		}
 	}
 
-	return InsertMetrics(ctx, db, metricsMap)
+	return InsertMetrics(ctx, s, metricsMap)
 }
 
 // TODO: modify to use in DuckDB

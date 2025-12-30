@@ -13,9 +13,11 @@ import (
 )
 
 const (
+	DefaultMetricsSummaryTableName = "otel_metrics_summary"
+
 	createMetricsSummaryTable = `
 CREATE TABLE IF NOT EXISTS
-	otel_metrics_summary (
+	%s (
 		timestamp				TIMESTAMP_NS,
 		service_name			VARCHAR,
 		metric_name				VARCHAR,
@@ -33,7 +35,7 @@ CREATE TABLE IF NOT EXISTS
 
 	insertMetricsSummarySQL = `
 INSERT INTO
-	otel_metrics_summary (
+	%s (
 		timestamp,
 		service_name,
 		metric_name,
@@ -67,7 +69,7 @@ SELECT
 	quantile_quantiles,
 	quantile_values
 FROM
-	otel_metrics_summary
+	%s
 ORDER BY
 	timestamp DESC
 LIMIT
@@ -160,8 +162,8 @@ type MetricsSummaryRecord struct {
 	QuantileValues    []float64 `json:"quantileValues"`
 }
 
-func QueryMetricsSummary(ctx context.Context, db *sql.DB) ([]MetricsSummaryRecord, error) {
-	rows, err := db.QueryContext(ctx, queryMetricsSummarySQL)
+func QueryMetricsSummary(ctx context.Context, s *Storage) ([]MetricsSummaryRecord, error) {
+	rows, err := s.DB.QueryContext(ctx, renderQuery(queryMetricsSummarySQL, s.Config.MetricsSummaryTable))
 	if err != nil {
 		return nil, err
 	}
