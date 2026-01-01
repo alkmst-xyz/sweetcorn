@@ -29,10 +29,15 @@ type StorageConfig struct {
 }
 
 type Storage struct {
-	Config          StorageConfig
-	DB              *sql.DB
-	InsertLogsSQL   string
-	InsertTracesSQL string
+	Config                               StorageConfig
+	DB                                   *sql.DB
+	InsertLogsSQL                        string
+	InsertTracesSQL                      string
+	InsertMetricsGaugeSQL                string
+	InsertMetricsSumSQL                  string
+	InsertMetricsHistogramSQL            string
+	InsertMetricsExponentialHistogramSQL string
+	InsertMetricsSummarySQL              string
 }
 
 func openDuckDB(dsn string) (*sql.DB, error) {
@@ -122,10 +127,15 @@ func NewStorage(ctx context.Context, cfg StorageConfig) (*Storage, error) {
 	log.Printf("Storage initialized with storageType=%s", cfg.StorageType)
 
 	s := &Storage{
-		Config:          cfg,
-		DB:              db,
-		InsertLogsSQL:   renderQuery(insertLogsSQL, cfg.LogsTable),
-		InsertTracesSQL: renderQuery(insertTracesSQL, cfg.TracesTable),
+		Config:                               cfg,
+		DB:                                   db,
+		InsertLogsSQL:                        renderQuery(insertLogsSQL, cfg.LogsTable),
+		InsertTracesSQL:                      renderQuery(insertTracesSQL, cfg.TracesTable),
+		InsertMetricsGaugeSQL:                renderQuery(insertMetricsGaugeSQL, cfg.MetricsGaugeTable),
+		InsertMetricsSumSQL:                  renderQuery(insertMetricsSumSQL, cfg.MetricsSumTable),
+		InsertMetricsHistogramSQL:            renderQuery(insertMetricsHistogramSQL, cfg.MetricsHistogramTable),
+		InsertMetricsExponentialHistogramSQL: renderQuery(insertMetricsExponentialHistogramSQL, cfg.MetricsExponentialHistogramTable),
+		InsertMetricsSummarySQL:              renderQuery(insertMetricsSummarySQL, cfg.MetricsSummaryTable),
 	}
 
 	return s, nil

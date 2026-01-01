@@ -10,15 +10,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
-// TODO: not required
-var supportedMetricTypes = map[pmetric.MetricType]string{
-	pmetric.MetricTypeGauge:                createMetricsGaugeTable,
-	pmetric.MetricTypeSum:                  createMetricsSumTable,
-	pmetric.MetricTypeHistogram:            createMetricsHistogramTable,
-	pmetric.MetricTypeExponentialHistogram: createMetricsExponentialHistogramTable,
-	pmetric.MetricTypeSummary:              createMetricsSummaryTable,
-}
-
 // MetricsModel is used to group metric data and insert into duckdb
 // any type of metrics need implement it.
 type MetricsModel interface {
@@ -52,7 +43,7 @@ type MetricsRecordBase struct {
 
 // InsertMetrics insert metric data into duckdb concurrently
 func InsertMetrics(ctx context.Context, s *Storage, metricsMap map[pmetric.MetricType]MetricsModel) error {
-	errsChan := make(chan error, len(supportedMetricTypes))
+	errsChan := make(chan error, len(metricsMap))
 	wg := &sync.WaitGroup{}
 	for _, m := range metricsMap {
 		wg.Add(1)
@@ -74,25 +65,24 @@ func InsertMetrics(ctx context.Context, s *Storage, metricsMap map[pmetric.Metri
 func NewMetricsModel(s *Storage) map[pmetric.MetricType]MetricsModel {
 	return map[pmetric.MetricType]MetricsModel{
 		pmetric.MetricTypeGauge: &gaugeMetrics{
-			insertSQL: renderQuery(insertMetricsGaugeSQL, s.Config.MetricsGaugeTable),
+			insertSQL: s.InsertMetricsGaugeSQL,
 		},
 		pmetric.MetricTypeSum: &sumMetrics{
-			insertSQL: renderQuery(insertMetricsSumSQL, s.Config.MetricsSumTable),
+			insertSQL: s.InsertMetricsSumSQL,
 		},
 		pmetric.MetricTypeHistogram: &histogramMetrics{
-			insertSQL: renderQuery(insertMetricsHistogramSQL, s.Config.MetricsHistogramTable),
+			insertSQL: s.InsertMetricsHistogramSQL,
 		},
 		pmetric.MetricTypeExponentialHistogram: &expHistogramMetrics{
-			insertSQL: renderQuery(insertMetricsExponentialHistogramSQL, s.Config.MetricsExponentialHistogramTable),
+			insertSQL: s.InsertMetricsExponentialHistogramSQL,
 		},
 		pmetric.MetricTypeSummary: &summaryMetrics{
-			insertSQL: renderQuery(insertMetricsSummarySQL, s.Config.MetricsSummaryTable),
+			insertSQL: s.InsertMetricsSummarySQL,
 		},
 	}
 }
 
 func IngestMetricsData(ctx context.Context, s *Storage, md pmetric.Metrics) error {
-	// TODO: avoid creating here, can be attached to storage
 	metricsMap := NewMetricsModel(s)
 
 	for i := 0; i < md.ResourceMetrics().Len(); i++ {
