@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+
+	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 type StorageType string
@@ -33,6 +35,7 @@ type Storage struct {
 	DB              *sql.DB
 	InsertLogsSQL   string
 	InsertTracesSQL string
+	MetricsMap      map[pmetric.MetricType]MetricsModel
 }
 
 func openDuckDB(dsn string) (*sql.DB, error) {
@@ -121,11 +124,30 @@ func NewStorage(ctx context.Context, cfg StorageConfig) (*Storage, error) {
 	log.Printf("Connected to DuckDB at %s", dsn)
 	log.Printf("Storage initialized with storageType=%s", cfg.StorageType)
 
+	metricsMap := map[pmetric.MetricType]MetricsModel{
+		pmetric.MetricTypeGauge: &gaugeMetrics{
+			insertSQL: renderQuery(insertMetricsGaugeSQL, cfg.MetricsGaugeTable),
+		},
+		pmetric.MetricTypeSum: &sumMetrics{
+			insertSQL: renderQuery(insertMetricsSumSQL, cfg.MetricsSumTable),
+		},
+		pmetric.MetricTypeHistogram: &histogramMetrics{
+			insertSQL: renderQuery(insertMetricsHistogramSQL, cfg.MetricsHistogramTable),
+		},
+		pmetric.MetricTypeExponentialHistogram: &expHistogramMetrics{
+			insertSQL: renderQuery(insertMetricsExponentialHistogramSQL, cfg.MetricsExponentialHistogramTable),
+		},
+		pmetric.MetricTypeSummary: &summaryMetrics{
+			insertSQL: renderQuery(insertMetricsSummarySQL, cfg.MetricsSummaryTable),
+		},
+	}
+
 	s := &Storage{
 		Config:          cfg,
 		DB:              db,
 		InsertLogsSQL:   renderQuery(insertLogsSQL, cfg.LogsTable),
 		InsertTracesSQL: renderQuery(insertTracesSQL, cfg.TracesTable),
+		MetricsMap:      metricsMap,
 	}
 
 	return s, nil

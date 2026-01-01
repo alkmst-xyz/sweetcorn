@@ -10,15 +10,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
-// TODO: not required
-var supportedMetricTypes = map[pmetric.MetricType]string{
-	pmetric.MetricTypeGauge:                createMetricsGaugeTable,
-	pmetric.MetricTypeSum:                  createMetricsSumTable,
-	pmetric.MetricTypeHistogram:            createMetricsHistogramTable,
-	pmetric.MetricTypeExponentialHistogram: createMetricsExponentialHistogramTable,
-	pmetric.MetricTypeSummary:              createMetricsSummaryTable,
-}
-
 // MetricsModel is used to group metric data and insert into duckdb
 // any type of metrics need implement it.
 type MetricsModel interface {
@@ -51,10 +42,10 @@ type MetricsRecordBase struct {
 }
 
 // InsertMetrics insert metric data into duckdb concurrently
-func InsertMetrics(ctx context.Context, s *Storage, metricsMap map[pmetric.MetricType]MetricsModel) error {
-	errsChan := make(chan error, len(supportedMetricTypes))
+func InsertMetrics(ctx context.Context, s *Storage) error {
+	errsChan := make(chan error, len(s.MetricsMap))
 	wg := &sync.WaitGroup{}
-	for _, m := range metricsMap {
+	for _, m := range s.MetricsMap {
 		wg.Add(1)
 		go func(m MetricsModel, wg *sync.WaitGroup) {
 			errsChan <- m.insert(ctx, s.DB)
@@ -70,31 +61,7 @@ func InsertMetrics(ctx context.Context, s *Storage, metricsMap map[pmetric.Metri
 	return errs
 }
 
-// NewMetricsModel create a model for contain different metric data
-func NewMetricsModel(s *Storage) map[pmetric.MetricType]MetricsModel {
-	return map[pmetric.MetricType]MetricsModel{
-		pmetric.MetricTypeGauge: &gaugeMetrics{
-			insertSQL: renderQuery(insertMetricsGaugeSQL, s.Config.MetricsGaugeTable),
-		},
-		pmetric.MetricTypeSum: &sumMetrics{
-			insertSQL: renderQuery(insertMetricsSumSQL, s.Config.MetricsSumTable),
-		},
-		pmetric.MetricTypeHistogram: &histogramMetrics{
-			insertSQL: renderQuery(insertMetricsHistogramSQL, s.Config.MetricsHistogramTable),
-		},
-		pmetric.MetricTypeExponentialHistogram: &expHistogramMetrics{
-			insertSQL: renderQuery(insertMetricsExponentialHistogramSQL, s.Config.MetricsExponentialHistogramTable),
-		},
-		pmetric.MetricTypeSummary: &summaryMetrics{
-			insertSQL: renderQuery(insertMetricsSummarySQL, s.Config.MetricsSummaryTable),
-		},
-	}
-}
-
 func IngestMetricsData(ctx context.Context, s *Storage, md pmetric.Metrics) error {
-	// TODO: avoid creating here, can be attached to storage
-	metricsMap := NewMetricsModel(s)
-
 	for i := 0; i < md.ResourceMetrics().Len(); i++ {
 		metrics := md.ResourceMetrics().At(i)
 		resAttr := metrics.Resource().Attributes()
@@ -107,7 +74,7 @@ func IngestMetricsData(ctx context.Context, s *Storage, md pmetric.Metrics) erro
 				if r.Type() == pmetric.MetricTypeEmpty {
 					return errors.New("metrics type is unset")
 				}
-				m, ok := metricsMap[r.Type()]
+				m, ok := s.MetricsMap[r.Type()]
 				if !ok {
 					return errors.New("unsupported metrics type")
 				}
@@ -116,7 +83,7 @@ func IngestMetricsData(ctx context.Context, s *Storage, md pmetric.Metrics) erro
 		}
 	}
 
-	return InsertMetrics(ctx, s, metricsMap)
+	return InsertMetrics(ctx, s)
 }
 
 // TODO: modify to use in DuckDB
