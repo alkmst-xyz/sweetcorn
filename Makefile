@@ -43,7 +43,7 @@ deps-update: ## Update all dependencies to latest versions
 .PHONY: dev-tools
 dev-tools: ## Install development tools
 	@echo "[INFO] Installing development tools..."
-	@go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/telemetrygen@v0.128.0
+	@go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/telemetrygen@latest
 
 ## Install UI dependencies.
 .PHONY: install-ui-deps
