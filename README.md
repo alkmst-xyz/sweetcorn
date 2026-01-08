@@ -1,5 +1,8 @@
 # sweetcorn
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/alkmst-xyz/sweetcorn)](https://goreportcard.com/report/github.com/alkmst-xyz/sweetcorn)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 A DuckDB backend for OpenTelemetry data.
 
 > **CAUTION:** This project is currently in **pre-alpha**.
