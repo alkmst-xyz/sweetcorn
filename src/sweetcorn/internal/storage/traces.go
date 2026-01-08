@@ -14,9 +14,11 @@ import (
 )
 
 const (
+	DefaultTracesTableName = "otel_traces"
+
 	createTracesTableSQL = `
 CREATE TABLE IF NOT EXISTS
-	otel_traces (
+	%s (
 		ts						TIMESTAMP_NS,
 		trace_id				VARCHAR,
 		span_id					VARCHAR,
@@ -43,7 +45,7 @@ CREATE TABLE IF NOT EXISTS
 
 	insertTracesSQL = `
 INSERT INTO
-	otel_traces (
+	%s (
 		ts,
 		trace_id,
 		span_id,
@@ -95,17 +97,17 @@ SELECT
 	links_trace_states,
 	links_attributes
 FROM
-	otel_traces
+	%s
 ORDER BY
 	ts DESC
 LIMIT
 	100;`
 
-	queryServicesSQL = `
+	traceServicesSQL = `
 SELECT DISTINCT
     service_name
 FROM
-	otel_traces
+	%s
 LIMIT
 	100;`
 
@@ -113,7 +115,7 @@ LIMIT
 SELECT DISTINCT
     span_name
 FROM
-	otel_traces
+	%s
 WHERE
 	service_name = ?
 	AND (? = '' OR span_kind = ?)
@@ -143,7 +145,7 @@ SELECT
 		)
 	) as spans
 FROM
-	otel_traces
+	%s
 WHERE
 	(? IS NULL OR service_name = ?)
 GROUP BY
@@ -168,7 +170,7 @@ SELECT
 		)
 	) as spans
 FROM
-	otel_traces
+	%s
 WHERE
 	trace_id = ?
 	AND (? = 0 OR epoch_us(ts) >= ?)
@@ -182,14 +184,14 @@ SELECT DISTINCT
         SELECT
             p.service_name
         FROM
-            otel_traces AS p
+			%s AS p
         WHERE
             p.span_id = c.parent_span_id
     ) AS parent_service_name,
     c.service_name AS child_service_name,
     COUNT(*) AS count
 FROM
-    otel_traces as c
+    %s as c
 WHERE
     c.parent_span_id != ''
 GROUP BY
@@ -317,14 +319,11 @@ func convertLinks(links ptrace.SpanLinkSlice) (traceIDs, spanIDs, states, attrs 
 	return
 }
 
-func CreateTracesTable(ctx context.Context, cfg *Config, db *sql.DB) error {
-	if _, err := db.ExecContext(ctx, createTracesTableSQL); err != nil {
-		return fmt.Errorf("exec create traces table sql: %w", err)
-	}
-	return nil
+func RenderDependenciesSQL(tableName string) string {
+	return fmt.Sprintf(dependenciesSQL, tableName, tableName)
 }
 
-func InsertTracesData(ctx context.Context, db *sql.DB, td ptrace.Traces) error {
+func InsertTracesData(ctx context.Context, db *sql.DB, insertTracesSQL string, td ptrace.Traces) error {
 	rsSpans := td.ResourceSpans()
 
 	for i := range rsSpans.Len() {
@@ -400,8 +399,8 @@ func InsertTracesData(ctx context.Context, db *sql.DB, td ptrace.Traces) error {
 	return nil
 }
 
-func QueryTraces(ctx context.Context, db *sql.DB) ([]TraceRecord, error) {
-	rows, err := db.QueryContext(ctx, queryTracesSQL)
+func QueryTraces(ctx context.Context, s *Storage) ([]TraceRecord, error) {
+	rows, err := s.DB.QueryContext(ctx, renderQuery(queryTracesSQL, s.Config.TracesTable))
 	if err != nil {
 		return nil, err
 	}
@@ -474,8 +473,8 @@ func QueryTraces(ctx context.Context, db *sql.DB) ([]TraceRecord, error) {
 	return results, nil
 }
 
-func GetServices(ctx context.Context, db *sql.DB) ([]string, error) {
-	rows, err := db.QueryContext(ctx, queryServicesSQL)
+func TraceServices(ctx context.Context, s *Storage) ([]string, error) {
+	rows, err := s.DB.QueryContext(ctx, renderQuery(traceServicesSQL, s.Config.TracesTable))
 	if err != nil {
 		return nil, err
 	}
@@ -503,8 +502,8 @@ type TraceOperationsParams struct {
 	SpanKind    string
 }
 
-func TraceOperations(ctx context.Context, db *sql.DB, params TraceOperationsParams) ([]string, error) {
-	rows, err := db.QueryContext(ctx, traceOperationsSQL,
+func TraceOperations(ctx context.Context, s *Storage, params TraceOperationsParams) ([]string, error) {
+	rows, err := s.DB.QueryContext(ctx, renderQuery(traceOperationsSQL, s.Config.TracesTable),
 		params.ServiceName,
 		params.SpanKind,
 		params.SpanKind,
@@ -542,8 +541,8 @@ type SearchTracesParams struct {
 	NumTraces     *int
 }
 
-func SearchTraces(ctx context.Context, db *sql.DB, params SearchTracesParams) ([]TraceResponse, error) {
-	rows, err := db.QueryContext(ctx, tracesSQL,
+func SearchTraces(ctx context.Context, s *Storage, params SearchTracesParams) ([]TraceResponse, error) {
+	rows, err := s.DB.QueryContext(ctx, renderQuery(tracesSQL, s.Config.TracesTable),
 		params.ServiceName,
 		params.ServiceName,
 	)
@@ -635,7 +634,7 @@ type TraceParams struct {
 	EndTime   time.Time
 }
 
-func Trace(ctx context.Context, db *sql.DB, params TraceParams) (TraceResponse, error) {
+func Trace(ctx context.Context, s *Storage, params TraceParams) (TraceResponse, error) {
 	var startTime int64
 	if !params.StartTime.IsZero() {
 		startTime = params.StartTime.UnixMicro()
@@ -646,7 +645,7 @@ func Trace(ctx context.Context, db *sql.DB, params TraceParams) (TraceResponse, 
 		endTime = params.EndTime.UnixMicro()
 	}
 
-	row := db.QueryRowContext(ctx, traceSQL,
+	row := s.DB.QueryRowContext(ctx, renderQuery(traceSQL, s.Config.TracesTable),
 		params.TraceID,
 		startTime,
 		startTime,
@@ -728,8 +727,11 @@ type DependenciesParams struct {
 	Lookback *time.Duration
 }
 
-func Dependencies(ctx context.Context, db *sql.DB, params DependenciesParams) ([]DependenciesData, error) {
-	rows, err := db.QueryContext(ctx, dependenciesSQL)
+func Dependencies(ctx context.Context, s *Storage, params DependenciesParams) ([]DependenciesData, error) {
+	rows, err := s.DB.QueryContext(
+		ctx,
+		renderQuery(dependenciesSQL, s.Config.TracesTable, s.Config.TracesTable),
+	)
 	if err != nil {
 		return nil, err
 	}

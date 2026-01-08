@@ -15,23 +15,31 @@ import (
 )
 
 func main() {
-	storageType := flag.String("storage-type", "duckdb", "storage type")
-	dsn := flag.String("dsn", ".sweetcorn_data/main.db", "data source name")
+	dataDir := flag.String("data-dir", ".sweetcorn_data", "Data directory.")
+	dbName := flag.String("db-name", "main.db", "Main DuckDB file name.")
+	storageType := flag.String("storage-type", "duckdb", "Storage type.")
 	flag.Parse()
-
-	cfg := &storage.Config{
-		StorageType:    storage.StorageType(*storageType),
-		DataSourceName: *dsn,
-	}
 
 	ctx := context.Background()
 
 	// create storage
-	db, err := cfg.NewStorage(ctx)
-	if err != nil {
-		log.Fatalf("Failed to initialize storage: %v", err)
+	storageConfig := storage.StorageConfig{
+		StorageType:                      storage.StorageType(*storageType),
+		DataDir:                          *dataDir,
+		DBName:                           *dbName,
+		LogsTable:                        storage.DefaultLogsTableName,
+		TracesTable:                      storage.DefaultTracesTableName,
+		MetricsSumTable:                  storage.DefaultMetricsSumTableName,
+		MetricsGaugeTable:                storage.DefaultMetricsGaugeTableName,
+		MetricsHistogramTable:            storage.DefaultMetricsHistogramTableName,
+		MetricsExponentialHistogramTable: storage.DefaultMetricsExponentialHistogramTableName,
+		MetricsSummaryTable:              storage.DefaultMetricsSummaryTableName,
 	}
-	defer db.Close()
+	storage, err := storage.NewStorage(ctx, storageConfig)
+	if err != nil {
+		log.Fatalf("failed to initialize storage: %v", err)
+	}
+	defer storage.Close()
 
 	// start servers
 	const httpAddr = ":4318"
@@ -41,13 +49,13 @@ func main() {
 	g, ctx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		return otlphttp.StartHTTPServer(ctx, db, httpAddr)
+		return otlphttp.StartHTTPServer(ctx, storage, httpAddr)
 	})
 	g.Go(func() error {
-		return otlp.StartGRPCServer(ctx, db, grpcAddr)
+		return otlp.StartGRPCServer(ctx, storage, grpcAddr)
 	})
 	g.Go(func() error {
-		return app.StartWebApp(ctx, db, appAddr)
+		return app.StartWebApp(ctx, storage, appAddr)
 	})
 
 	if err := g.Wait(); err != nil {

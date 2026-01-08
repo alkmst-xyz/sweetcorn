@@ -1,10 +1,5 @@
 package storage
 
-import (
-	"context"
-	"database/sql"
-)
-
 // TODO: replace hardcoded config with templating
 const (
 	setupDuckLakeSQL = `
@@ -36,9 +31,27 @@ ATTACH 'ducklake:postgres:dbname=postgres' AS sweetcorn_ducklake (DATA_PATH 's3:
 USE sweetcorn_ducklake;`
 )
 
-func SetupDuckLake(ctx context.Context, cfg *Config, db *sql.DB) error {
-	if _, err := db.ExecContext(ctx, setupDuckLakeSQL); err != nil {
-		return err
-	}
-	return nil
-}
+const (
+	installDuckLakeSQL = `INSTALL ducklake;`
+	installPostgresSQL = `INSTALL postgres;`
+	createS3SecretSQL  = `CREATE OR REPLACE SECRET (
+		TYPE s3,
+		PROVIDER config,
+		KEY_ID 'minio-user',
+		SECRET 'minio-secret',
+		REGION 'us-east-1',
+		ENDPOINT '127.0.0.1:9000',
+		URL_STYLE 'path',
+		USE_SSL false
+	);`
+	createPostgresSecretSQL = `CREATE OR REPLACE SECRET (
+		TYPE postgres,
+		HOST '127.0.0.1',
+		PORT 5432,
+		DATABASE postgres,
+		USER 'admin',
+		PASSWORD 'admin'
+	);`
+	attachDuckLakeSQL = `ATTACH 'ducklake:postgres:dbname=postgres' AS sweetcorn_ducklake (DATA_PATH 's3://sweetcorn/');`
+	useDuckLakeSQL    = `USE sweetcorn_ducklake;`
+)

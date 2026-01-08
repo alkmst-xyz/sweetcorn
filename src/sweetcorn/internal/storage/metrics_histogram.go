@@ -13,9 +13,11 @@ import (
 )
 
 const (
+	DefaultMetricsHistogramTableName = "otel_metrics_histogram"
+
 	createMetricsHistogramTable = `
 CREATE TABLE IF NOT EXISTS
-	otel_metrics_histogram (
+	%s (
 		timestamp				TIMESTAMP_NS,
 		service_name			VARCHAR,
 		metric_name				VARCHAR,
@@ -35,7 +37,7 @@ CREATE TABLE IF NOT EXISTS
 
 	insertMetricsHistogramSQL = `
 INSERT INTO
-	otel_metrics_histogram (
+	%s (
 		timestamp,
 		service_name,
 		metric_name,
@@ -73,7 +75,7 @@ SELECT
 	min,
 	max
 FROM
-	otel_metrics_histogram
+	%s	
 ORDER BY
 	timestamp DESC
 LIMIT
@@ -169,8 +171,8 @@ type MetricsHistogramRecord struct {
 	Max            float64   `json:"max"`
 }
 
-func QueryMetricsHistogram(ctx context.Context, db *sql.DB) ([]MetricsHistogramRecord, error) {
-	rows, err := db.QueryContext(ctx, queryMetricsHistogramSQL)
+func QueryMetricsHistogram(ctx context.Context, s *Storage) ([]MetricsHistogramRecord, error) {
+	rows, err := s.DB.QueryContext(ctx, renderQuery(queryMetricsHistogramSQL, s.Config.MetricsHistogramTable))
 	if err != nil {
 		return nil, err
 	}

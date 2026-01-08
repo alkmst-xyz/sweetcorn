@@ -3,7 +3,6 @@ package otlphttp
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"fmt"
 	"io"
 	"log"
@@ -25,8 +24,8 @@ import (
 )
 
 type HTTPService struct {
-	ctx context.Context
-	db  *sql.DB
+	ctx     context.Context
+	storage *storage.Storage
 }
 
 //
@@ -264,7 +263,7 @@ func (s HTTPService) handleLogs(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = storage.InsertLogsData(s.ctx, s.db, otlpReq.Logs())
+	err = storage.InsertLogsData(s.ctx, s.storage.DB, s.storage.InsertLogsSQL, otlpReq.Logs())
 	if err != nil {
 		writeError(resp, enc, err, http.StatusInternalServerError)
 		return
@@ -299,7 +298,7 @@ func (s HTTPService) handleTraces(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = storage.InsertTracesData(s.ctx, s.db, otlpReq.Traces())
+	err = storage.InsertTracesData(s.ctx, s.storage.DB, s.storage.InsertTracesSQL, otlpReq.Traces())
 	if err != nil {
 		writeError(resp, enc, err, http.StatusInternalServerError)
 		return
@@ -334,7 +333,7 @@ func (s HTTPService) handleMetrics(resp http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	err = storage.IngestMetricsData(s.ctx, s.db, otlpReq.Metrics())
+	err = storage.IngestMetricsData(s.ctx, s.storage, otlpReq.Metrics())
 	if err != nil {
 		writeError(resp, enc, err, http.StatusInternalServerError)
 		return
@@ -352,10 +351,10 @@ func (s HTTPService) handleMetrics(resp http.ResponseWriter, req *http.Request) 
 // Main
 //
 
-func StartHTTPServer(ctx context.Context, db *sql.DB, addr string) error {
+func StartHTTPServer(ctx context.Context, storage *storage.Storage, addr string) error {
 	svc := &HTTPService{
-		ctx: ctx,
-		db:  db,
+		ctx:     ctx,
+		storage: storage,
 	}
 
 	mux := http.NewServeMux()

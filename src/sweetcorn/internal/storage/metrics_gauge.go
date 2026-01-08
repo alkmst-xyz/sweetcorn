@@ -12,9 +12,11 @@ import (
 )
 
 const (
+	DefaultMetricsGaugeTableName = "otel_metrics_gauge"
+
 	createMetricsGaugeTable = `
 CREATE TABLE IF NOT EXISTS
-	otel_metrics_gauge (
+	%s (
 		timestamp				TIMESTAMP_NS,
 		service_name			VARCHAR,
 		metric_name				VARCHAR,
@@ -29,7 +31,7 @@ CREATE TABLE IF NOT EXISTS
 
 	insertMetricsGaugeSQL = `
 INSERT INTO
-	otel_metrics_gauge (
+	%s (
 		timestamp,
 		service_name,
 		metric_name,
@@ -57,7 +59,7 @@ SELECT
 	attributes,
 	value
 FROM
-	otel_metrics_gauge
+	%s	
 ORDER BY
 	timestamp DESC
 LIMIT
@@ -143,8 +145,8 @@ type MetricsGaugeRecord struct {
 	Value float64 `json:"value"`
 }
 
-func QueryMetricsGauge(ctx context.Context, db *sql.DB) ([]MetricsGaugeRecord, error) {
-	rows, err := db.QueryContext(ctx, queryMetricsGaugeSQL)
+func QueryMetricsGauge(ctx context.Context, s *Storage) ([]MetricsGaugeRecord, error) {
+	rows, err := s.DB.QueryContext(ctx, renderQuery(queryMetricsGaugeSQL, s.Config.MetricsGaugeTable))
 	if err != nil {
 		return nil, err
 	}
