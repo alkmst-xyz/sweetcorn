@@ -48,7 +48,7 @@ dev-tools: ## Install development tools
 .PHONY: install-ui-deps
 install-ui-deps:
 	@echo "[INFO] Installing UI dependencies..."
-	@fnm use && pnpm install
+	@pnpm install
 
 ###############################################################################
 # Build
@@ -58,7 +58,7 @@ install-ui-deps:
 .PHONY: build-ui
 build-ui:
 	@echo "[INFO] Building sweetcorn UI..."
-	@fnm use && pnpm --filter sweetcorn-ui run build
+	@pnpm --filter sweetcorn-ui run build
 	@echo "[INFO] Copying web assets..."
 	@cp -r ./packages/sweetcorn-ui/build ./internal/web/build
 
