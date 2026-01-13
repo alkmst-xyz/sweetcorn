@@ -1,4 +1,4 @@
-package web
+package app
 
 import (
 	"embed"
@@ -11,6 +11,6 @@ import (
 var assets embed.FS
 
 // FS contains the web UI assets.
-func AssetsFS() (fs.FS, error) {
+func WebAssetsFS() (fs.FS, error) {
 	return fs.Sub(assets, "build")
 }

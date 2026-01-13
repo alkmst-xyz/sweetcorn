@@ -27,7 +27,7 @@ RUN go mod download
 
 COPY --parents **/*.go ./
 
-COPY --from=build-ui /workspace/packages/sweetcorn-ui/build ./internal/web/build
+COPY --from=build-ui /workspace/packages/sweetcorn-ui/build ./internal/app/build
 
 RUN go build -o sweetcorn .
 

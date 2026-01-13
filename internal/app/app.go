@@ -13,7 +13,6 @@ import (
 	"github.com/rs/cors"
 
 	"github.com/alkmst-xyz/sweetcorn/internal/storage"
-	"github.com/alkmst-xyz/sweetcorn/internal/web"
 )
 
 const webDefaultContentType = "application/json"
@@ -418,7 +417,7 @@ func StartWebApp(ctx context.Context, storage *storage.Storage, addr string) err
 	mux := http.NewServeMux()
 
 	// Web UI
-	webAssets, webAssetsErr := web.AssetsFS()
+	webAssets, webAssetsErr := WebAssetsFS()
 	if webAssetsErr != nil {
 		return webAssetsErr
 	}
