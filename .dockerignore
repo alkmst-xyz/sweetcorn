@@ -4,9 +4,9 @@
 build
 Dockerfile
 
-src/sweetcorn-ui/.svelte-kit
-src/sweetcorn-ui/build
-src/sweetcorn-ui/node_modules
-src/sweetcorn-ui/test-results
+packages/sweetcorn-ui/.svelte-kit
+packages/sweetcorn-ui/build
+packages/sweetcorn-ui/node_modules
+packages/sweetcorn-ui/test-results
 
 **/*.md
