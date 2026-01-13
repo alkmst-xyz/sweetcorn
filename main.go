@@ -8,10 +8,10 @@ import (
 	_ "github.com/duckdb/duckdb-go/v2"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/alkmst-xyz/sweetcorn/sweetcorn/internal/app"
-	"github.com/alkmst-xyz/sweetcorn/sweetcorn/internal/otlp"
-	"github.com/alkmst-xyz/sweetcorn/sweetcorn/internal/otlphttp"
-	"github.com/alkmst-xyz/sweetcorn/sweetcorn/internal/storage"
+	"github.com/alkmst-xyz/sweetcorn/internal/app"
+	"github.com/alkmst-xyz/sweetcorn/internal/otlp"
+	"github.com/alkmst-xyz/sweetcorn/internal/otlphttp"
+	"github.com/alkmst-xyz/sweetcorn/internal/storage"
 )
 
 func main() {

@@ -20,7 +20,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/alkmst-xyz/sweetcorn/sweetcorn/internal/storage"
+	"github.com/alkmst-xyz/sweetcorn/internal/storage"
 )
 
 type HTTPService struct {

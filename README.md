@@ -23,12 +23,6 @@ docker compose up -d
 | Grafana      | http://localhost:3000  |
 | HotROD       | http://localhost:8080  |
 
-## TODO
-
-- [ ] Use `*storage.Storage` as data interface instead of `*sql.DB`.
-- [ ] Remove golang workspaces
-- [ ] Move demo to examples
-
 ## Features
 
 - [x] Logs

@@ -5,8 +5,7 @@ BUILD_DIR := ./build
 BIN_DIR := $(BUILD_DIR)/bin
 COVERAGE_DIR := $(BUILD_DIR)/coverage
 
-DIR_SWEETCORN := ./src/sweetcorn
-DIR_DEMO := ./src/demo
+DIR_DEMO := ./examples/demo
 
 ###############################################################################
 # Default Target
@@ -31,14 +30,14 @@ dev-setup: ## Setup development environment
 .PHONY: deps
 deps: ## Download and tidy dependencies
 	@echo "[INFO] Downloading dependencies..."
-	cd $(DIR_SWEETCORN) && go mod download
-	cd $(DIR_SWEETCORN) && go mod tidy
+	go mod download
+	go mod tidy
 
 .PHONY: deps-update
 deps-update: ## Update all dependencies to latest versions
 	@echo "[INFO] Updating dependencies to latest versions..."
-	cd $(DIR_SWEETCORN) && go get -u -t ./...
-	cd $(DIR_SWEETCORN) && go mod tidy
+	go get -u -t ./...
+	go mod tidy
 
 .PHONY: dev-tools
 dev-tools: ## Install development tools
@@ -61,19 +60,19 @@ build-ui:
 	@echo "[INFO] Building sweetcorn UI..."
 	@fnm use && pnpm --filter sweetcorn-ui run build
 	@echo "[INFO] Copying web assets..."
-	@cp -r ./src/sweetcorn-ui/build ./src/sweetcorn/internal/web/build
+	@cp -r ./packages/sweetcorn-ui/build ./internal/web/build
 
 # Build sweetcorn
 .PHONY: build
 build: dev-setup build-ui
 	@echo "[INFO] Building sweetcorn..."
-	go build -o $(BIN_DIR) $(DIR_SWEETCORN)
+	go build -o $(BIN_DIR) .
 
 # Build demo
 .PHONY: build-demo
 build-demo: dev-setup
 	@echo "[INFO] Building demo..."
-	go build -o $(BIN_DIR) $(DIR_DEMO)
+	cd $(DIR_DEMO) && go build -o demo .
 
 ###############################################################################
 # Run
@@ -89,7 +88,7 @@ run: build
 .PHONY: run-demo
 run-demo: build-demo
 	@echo "[INFO] Starting demo..."	
-	OTEL_RESOURCE_ATTRIBUTES="service.name=dice,service.version=0.1.0" $(BIN_DIR)/demo
+	OTEL_RESOURCE_ATTRIBUTES="service.name=dice,service.version=0.1.0" ./examples/demo/demo
 
 ###############################################################################
 # Testing
@@ -98,13 +97,13 @@ run-demo: build-demo
 .PHONY: test
 test: dev-setup ## Run all tests
 	@echo "[INFO] Running tests..."
-	cd $(DIR_SWEETCORN) && go test -v ./...
+	go test -v ./...
 
 .PHONY: test-coverage
 test-coverage: dev-setup ## Run all tests with coverage
 	@echo "[INFO] Running tests with coverage..."
-	cd $(DIR_SWEETCORN) && go test -v -coverprofile ../../$(COVERAGE_DIR)/coverage.out ./...
-	cd $(DIR_SWEETCORN) && go tool cover -html ../../$(COVERAGE_DIR)/coverage.out -o ../../$(COVERAGE_DIR)/coverage.html
+	go test -v -coverprofile $(COVERAGE_DIR)/coverage.out ./...
+	go tool cover -html $(COVERAGE_DIR)/coverage.out -o $(COVERAGE_DIR)/coverage.html
 
 ###############################################################################
 # Linting and Code Quality
@@ -113,17 +112,17 @@ test-coverage: dev-setup ## Run all tests with coverage
 .PHONY: fmt
 fmt: ## Format code
 	@echo "[INFO] Formatting code..."
-	cd $(DIR_SWEETCORN) && go fmt ./...
+	go fmt ./...
 
 .PHONY: vet
 vet: ## Run go vet
 	@echo "[INFO] Running go vet..."
-	cd $(DIR_SWEETCORN) && go vet ./...
+	go vet ./...
 
 .PHONY: mod-verify
 mod-verify: ## Verify module dependencies
 	@echo "[INFO] Verifying module dependencies..."
-	cd $(DIR_SWEETCORN) && go mod verify
+	go mod verify
 
 ###############################################################################
 # CI/CD
@@ -150,13 +149,13 @@ clean: ## Clean build artifacts
 .PHONY: dev-sweetcorn
 dev-sweetcorn:
 	@echo "[INFO] Running sweetcorn..."
-	go run ./src/sweetcorn
+	go run .
 
 # Run demo
 .PHONY: dev-demo
 dev-demo:
 	@echo "[INFO] Starting demo..."	
-	OTEL_RESOURCE_ATTRIBUTES="service.name=dice,service.version=0.1.0" go run ./src/sweetcorn
+	cd $(DIR_DEMO) && OTEL_RESOURCE_ATTRIBUTES="service.name=dice,service.version=0.1.0" go run .
 
 # Run the frontend server in development mode.
 .PHONY: dev-ui

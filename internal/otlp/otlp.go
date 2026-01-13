@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 
-	"github.com/alkmst-xyz/sweetcorn/sweetcorn/internal/storage"
+	"github.com/alkmst-xyz/sweetcorn/internal/storage"
 )
 
 //

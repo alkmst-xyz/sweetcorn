@@ -1,6 +1,6 @@
-module github.com/alkmst-xyz/sweetcorn/demo
+module github.com/alkmst-xyz/sweetcorn/examples/demo
 
-go 1.24.1
+go 1.25.5
 
 require (
 	go.opentelemetry.io/contrib/bridges/otelslog v0.14.0
