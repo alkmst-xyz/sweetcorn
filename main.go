@@ -8,10 +8,10 @@ import (
 	_ "github.com/duckdb/duckdb-go/v2"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/alkmst-xyz/sweetcorn/internal/app"
 	"github.com/alkmst-xyz/sweetcorn/internal/otlp"
 	"github.com/alkmst-xyz/sweetcorn/internal/otlphttp"
 	"github.com/alkmst-xyz/sweetcorn/internal/storage"
+	"github.com/alkmst-xyz/sweetcorn/internal/web"
 )
 
 func main() {
@@ -56,7 +56,7 @@ func main() {
 		return otlp.StartGRPCServer(ctx, storage, grpcAddr)
 	})
 	g.Go(func() error {
-		return app.StartWebApp(ctx, storage, appAddr)
+		return web.StartWebApp(ctx, storage, appAddr)
 	})
 
 	if err := g.Wait(); err != nil {

@@ -60,7 +60,7 @@ build-ui:
 	@echo "[INFO] Building sweetcorn UI..."
 	@pnpm --filter sweetcorn-ui run build
 	@echo "[INFO] Copying web assets..."
-	@cp -r ./packages/sweetcorn-ui/build ./internal/app/build
+	@cp -r ./packages/sweetcorn-ui/build ./internal/web/build
 
 # Build sweetcorn
 .PHONY: build
