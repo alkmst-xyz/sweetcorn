@@ -65,6 +65,8 @@ docker compose up -d
 - [x] Handle protobuf payload
 - [x] Handle JSON payload in HTTP
 - [x] Docker Image
+- [ ] Support gRPC compression.
+  - Required to work as exporter for otel collector.
 - [ ] Use `zap` logger.
 - [ ] ~~Exporter for open telemetry collector~~: not planned for v0.1.0.
 - [ ] TTL for rows (duck db does not provide it)

@@ -1,0 +1,114 @@
+name: sweetcorn-bg
+
+services:
+  # Clients
+  hotrod:
+    image: jaegertracing/example-hotrod:1.72.0
+    ports:
+      - "8080:8080"
+      - "8083:8083"
+    command: [ "all" ]
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+    depends_on:
+      - otel-collector
+    networks:
+      - net
+
+  # Load Balancer
+  otel-collector:
+    image: otel/opentelemetry-collector:0.143.0
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol/config.yaml
+    ports:
+      - 4317:4317
+      - 4318:4318
+    networks:
+      - net
+
+  # Storage - Blue
+  jaeger:
+    image: cr.jaegertracing.io/jaegertracing/jaeger:2.14.0
+    ports:
+      - "16686:16686"
+      - "4617:4317"
+      - "4618:4318"
+    networks:
+      - net
+
+  # Storage - Green
+  sweetcorn:
+    build:
+      context: ../..
+    ports:
+      - "4917:4317"
+      - "4918:4318"
+      - "13579:13579"
+    depends_on:
+      - ducklake-postgres
+      - ducklake-minio
+    command: [ "bin/sweetcorn", "--storage-type", "ducklake" ]
+    networks:
+      - net
+
+  ducklake-postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_USER: "admin"
+      POSTGRES_DB: "postgres"
+      POSTGRES_PASSWORD: "admin"
+      LANG: en_US.utf8
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=en-US"
+      TZ: "Europe/Vienna"
+    ports:
+      - "5432:5432"
+    volumes:
+      - ducklake-postgres-data:/var/lib/postgresql/data
+    networks:
+      - net
+
+  ducklake-minio:
+    image: quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z
+    command: [ "server", "/data", "--console-address", ":9090" ]
+    environment:
+      MINIO_ROOT_USER: "minio-user"
+      MINIO_ROOT_PASSWORD: "minio-secret"
+    ports:
+      - "9000:9000"
+      - "9090:9090"
+    volumes:
+      - ducklake-minio-data:/data
+      - ./create-bucket.sh:/create-bucket.sh
+    post_start:
+      - command: [ "./create-bucket.sh" ]
+    networks:
+      - net
+
+  # Visualization
+  grafana:
+    image: grafana/grafana:12.1.1
+    restart: on-failure
+    command:
+      - --config=/etc/grafana-config/grafana.ini
+    volumes:
+      - ./grafana:/etc/grafana-config
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000/healthz" ]
+      interval: 1s
+      timeout: 10s
+      retries: 5
+      start_period: 0s
+      start_interval: 0s
+    networks:
+      - net
+
+networks:
+  net:
+
+
+volumes:
+  ducklake-postgres-data:
+  ducklake-minio-data:
