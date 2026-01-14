@@ -1,9 +1,29 @@
-# sweetcorn
+<div align="center">
+	<img
+		alt="Sweetcorn logo"
+		src="./docs/assets/sweetcorn-brand-assets-v1/sweetcorn-logo.png"
+		height="100"
+	/>
+</div>
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/alkmst-xyz/sweetcorn)](https://goreportcard.com/report/github.com/alkmst-xyz/sweetcorn)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+<h1 align="center">Sweetcorn</h1>
 
-A DuckDB backend for OpenTelemetry data.
+<p align="center">
+	<a href="https://goreportcard.com/report/github.com/alkmst-xyz/sweetcorn">
+		<img
+			src="https://goreportcard.com/badge/github.com/alkmst-xyz/sweetcorn"
+			alt="Go Report Card"
+		/>
+	</a>
+	<a href="https://opensource.org/licenses/Apache-2.0">
+		<img
+			src="https://img.shields.io/badge/License-Apache%202.0-blue.svg"
+			alt="License"
+		/>
+	</a>
+</p>
+
+Sweetcorn is a DuckDB/DuckLake storage backend for OpenTelemetry signals.
 
 > **CAUTION:** This project is currently in **pre-alpha**.
 
