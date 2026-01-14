@@ -26,6 +26,18 @@ type StorageConfig struct {
 	MetricsHistogramTable            string
 	MetricsExponentialHistogramTable string
 	MetricsSummaryTable              string
+
+	// DuckLake configuration
+	DuckLakeName              string
+	DuckLakeCatalogDBHost     string
+	DuckLakeCatalogDBPort     string
+	DuckLakeCatalogDBName     string
+	DuckLakeCatalogDBUser     string
+	DuckLakeCatalogDBPassword string
+	DuckLakeStorageKeyID      string
+	DuckLakeStorageSecret     string
+	DuckLakeStorageRegion     string
+	DuckLakeStorageEndpoint   string
 }
 
 type Storage struct {
@@ -81,7 +93,7 @@ func (b DuckLakeBackend) init(ctx context.Context, dsn string, cfg StorageConfig
 		return nil, err
 	}
 
-	setupDuckLake(ctx, db)
+	setupDuckLake(ctx, cfg, db)
 	createTables(ctx, cfg, db)
 
 	return db, nil
@@ -161,16 +173,7 @@ func execQueries(ctx context.Context, db *sql.DB, queries []string) error {
 	return nil
 }
 
-// Create all tables used by sweetcorn
-// TODO: make table names configurable
-//
-// otel_logs
-// otel_traces
-// otel_metrics_gauge
-// otel_metrics_sum
-// otel_metrics_histogram
-// otel_metrics_exponential_histogram
-// otel_metrics_summary
+// Create all tables used by sweetcorn.
 func createTables(ctx context.Context, cfg StorageConfig, db *sql.DB) error {
 	var createTableQueries = []string{
 		renderQuery(createLogsTableSQL, cfg.LogsTable),
@@ -185,14 +188,16 @@ func createTables(ctx context.Context, cfg StorageConfig, db *sql.DB) error {
 	return execQueries(ctx, db, createTableQueries)
 }
 
-func setupDuckLake(ctx context.Context, db *sql.DB) error {
+func setupDuckLake(ctx context.Context, cfg StorageConfig, db *sql.DB) error {
+	// TODO: add config validation.
+
 	var duckLakeSetupQueries = []string{
 		installDuckLakeSQL,
 		installPostgresSQL,
 		createS3SecretSQL,
 		createPostgresSecretSQL,
-		attachDuckLakeSQL,
-		useDuckLakeSQL,
+		renderQuery(attachDuckLakeSQL, cfg.DuckLakeName),
+		renderQuery(useDuckLakeSQL, cfg.DuckLakeName),
 	}
 
 	return execQueries(ctx, db, duckLakeSetupQueries)

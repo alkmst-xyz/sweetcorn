@@ -34,6 +34,7 @@ func main() {
 		MetricsHistogramTable:            storage.DefaultMetricsHistogramTableName,
 		MetricsExponentialHistogramTable: storage.DefaultMetricsExponentialHistogramTableName,
 		MetricsSummaryTable:              storage.DefaultMetricsSummaryTableName,
+		DuckLakeName:                     storage.DefaultDuckLakeName,
 	}
 	storage, err := storage.NewStorage(ctx, storageConfig)
 	if err != nil {
