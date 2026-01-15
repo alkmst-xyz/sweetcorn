@@ -123,3 +123,5 @@ telemetrygen traces --otlp-http --otlp-insecure --otlp-endpoint localhost:4318 -
 
 1. [Observability 3](https://charity.wtf/2025/03/24/another-observability-3-0-appears-on-the-horizon/)
 2. [LogHouse](https://clickhouse.com/blog/building-a-logging-platform-with-clickhouse-and-saving-millions-over-datadog#schema)
+3. [QuickWit](https://quickwit.io/)
+   - A similar implementation.
