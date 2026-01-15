@@ -23,8 +23,9 @@ services:
     volumes:
       - ./otel-collector-config.yaml:/etc/otelcol/config.yaml
     ports:
-      - 4317:4317
-      - 4318:4318
+      - "4317:4317" # OTLP gRPC receiver
+      - "4318:4318" # OTLP HTTP receiver
+      - "8889:8889" # Prometheus metrics exporter
     depends_on:
       - jaeger
       - loki
@@ -46,6 +47,18 @@ services:
       - "16686:16686"
       - "4617:4317"
       - "4618:4318"
+    networks:
+      - net
+
+  prometheus:
+    image: prom/prometheus:v3.9.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yaml:/prometheus.yaml
+    command:
+      - --config.file=/prometheus.yaml
+      - --enable-feature=exemplar-storage
     networks:
       - net
 
@@ -88,7 +101,7 @@ services:
       MINIO_ROOT_PASSWORD: "minio-secret"
     ports:
       - "9000:9000"
-      - "9090:9090"
+      - "9091:9090"
     volumes:
       - ducklake-minio-data:/data
       - ./create-bucket.sh:/create-bucket.sh

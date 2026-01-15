@@ -7,11 +7,12 @@ receivers:
         endpoint: 0.0.0.0:4318
 
 exporters:
-  debug:
   otlp/jaeger:
     endpoint: jaeger:4317
     tls:
       insecure: true
+  prometheus:
+    endpoint: "0.0.0.0:8889"
   otlphttp/loki:
     endpoint: "http://loki:3100/otlp"
     tls:
@@ -30,7 +31,7 @@ service:
       exporters: [otlp/jaeger, otlp/sweetcorn]
     metrics:
       receivers: [otlp]
-      exporters: [debug]
+      exporters: [prometheus, otlp/sweetcorn]
     logs:
       receivers: [otlp]
       exporters: [otlphttp/loki, otlp/sweetcorn]
