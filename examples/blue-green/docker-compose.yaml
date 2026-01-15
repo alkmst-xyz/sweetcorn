@@ -2,8 +2,10 @@ name: sweetcorn-bg
 
 services:
   # Clients
+
+  # Generate fake traces
   hotrod:
-    image: jaegertracing/example-hotrod:1.72.0
+    image: jaegertracing/example-hotrod:2.14.0
     ports:
       - "8080:8080"
       - "8083:8083"
@@ -23,10 +25,21 @@ services:
     ports:
       - 4317:4317
       - 4318:4318
+    depends_on:
+      - jaeger
+      - loki
+      - sweetcorn
     networks:
       - net
 
   # Storage - Blue
+  loki:
+    image: grafana/loki:3.6.3
+    ports:
+      - "3100:3100"
+    networks:
+      - net
+
   jaeger:
     image: cr.jaegertracing.io/jaegertracing/jaeger:2.14.0
     ports:
@@ -86,7 +99,7 @@ services:
 
   # Visualization
   grafana:
-    image: grafana/grafana:12.1.1
+    image: grafana/grafana:12.3
     restart: on-failure
     command:
       - --config=/etc/grafana-config/grafana.ini

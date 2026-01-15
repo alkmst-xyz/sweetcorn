@@ -4,15 +4,18 @@ datasources:
   - name: jaeger
     type: jaeger
     access: proxy
-    orgId: 1
     url: http://jaeger:16686
     basicAuth: false
-    isDefault: false
+
+  - name: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    basicAuth: false
 
   - name: sweetcorn
     type: jaeger
     access: proxy
-    orgId: 1
     url: http://sweetcorn:13579/jaeger
     basicAuth: false
-    isDefault: false
+    isDefault: true

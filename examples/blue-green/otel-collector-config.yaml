@@ -12,6 +12,11 @@ exporters:
     endpoint: jaeger:4317
     tls:
       insecure: true
+  otlphttp/loki:
+    endpoint: "http://loki:3100/otlp"
+    tls:
+      insecure: true
+    compression: none
   otlp/sweetcorn:
     endpoint: sweetcorn:4317
     tls:
@@ -28,4 +33,4 @@ service:
       exporters: [debug]
     logs:
       receivers: [otlp]
-      exporters: [debug]
+      exporters: [otlphttp/loki, otlp/sweetcorn]
