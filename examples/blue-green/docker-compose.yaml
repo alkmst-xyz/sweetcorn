@@ -19,7 +19,7 @@ services:
 
   # Load Balancer
   otel-collector:
-    image: otel/opentelemetry-collector:0.143.0
+    image: otel/opentelemetry-collector:0.143.1
     volumes:
       - ./otel-collector-config.yaml:/etc/otelcol/config.yaml
     ports:
@@ -88,8 +88,6 @@ services:
       TZ: "Europe/Vienna"
     ports:
       - "5432:5432"
-    volumes:
-      - ducklake-postgres-data:/var/lib/postgresql/data
     networks:
       - net
 
@@ -103,7 +101,6 @@ services:
       - "9000:9000"
       - "9091:9090"
     volumes:
-      - ducklake-minio-data:/data
       - ./create-bucket.sh:/create-bucket.sh
     post_start:
       - command: [ "./create-bucket.sh" ]
@@ -135,6 +132,3 @@ networks:
   net:
 
 
-volumes:
-  ducklake-postgres-data:
-  ducklake-minio-data:
