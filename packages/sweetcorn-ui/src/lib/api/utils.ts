@@ -1,13 +1,13 @@
-const API_BASE_DEV = 'http://localhost:13579/';
-const API_BASE_PROD = '/';
+const API_BASE_URL_DEV = 'http://localhost:13579/';
+const API_BASE_URL_PROD = '/';
 
-function getBaseUrl(): string {
-	// Load API base URL from .env file in development mode.
+// Load Sweetcorn API base URL from vite environment.
+function getBaseURL(): string {
+	const baseURL = import.meta.env.VITE_API_BASE_URL;
 	if (import.meta.env.DEV) {
-		return import.meta.env.VITE_API_BASE_DEV || API_BASE_DEV;
+		return baseURL || API_BASE_URL_DEV;
 	}
-
-	return API_BASE_PROD;
+	return baseURL || API_BASE_URL_PROD;
 }
 
-export const API_BASE = getBaseUrl();
+export const API_BASE = getBaseURL();
