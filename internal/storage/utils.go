@@ -13,8 +13,9 @@ func renderQuery(queryTemplate string, args ...any) string {
 	return fmt.Sprintf(queryTemplate, args...)
 }
 
-func getServiceName(resAttr pcommon.Map) string {
-	if v, ok := resAttr.Get(string(semconv.ServiceNameKey)); ok {
+// Get the service name of a resource according to OTEL semantic conventions.
+func getServiceName(resAttrs pcommon.Map) string {
+	if v, ok := resAttrs.Get(string(semconv.ServiceNameKey)); ok {
 		return v.AsString()
 	}
 
