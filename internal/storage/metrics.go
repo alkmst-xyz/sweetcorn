@@ -14,18 +14,20 @@ import (
 // any type of metrics need implement it.
 type MetricsModel interface {
 	// Add used to bind MetricsMetaData to a specific metric then put them into a slice
-	Add(resAttr pcommon.Map, resURL string, scopeInstr pcommon.InstrumentationScope, scopeURL string, metrics pmetric.Metric)
+	Add(resSchemaUrl string, resAttrs pcommon.Map, scopeSchemaUrl string, scope pcommon.InstrumentationScope, metric pmetric.Metric)
 
 	// insert is used to insert metric data to duckdb
 	insert(ctx context.Context, db *sql.DB) error
 }
 
-// MetricsMetaData contain specific metric data
-type MetricsMetaData struct {
-	ResAttr    pcommon.Map
-	ResURL     string
-	ScopeURL   string
-	ScopeInstr pcommon.InstrumentationScope
+type baseMetricsModel struct {
+	resSchemaUrl   string
+	resAttrs       pcommon.Map
+	scopeSchemaUrl string
+	scope          pcommon.InstrumentationScope
+	name           string
+	description    string
+	unit           string
 }
 
 // Query base DTO
@@ -45,19 +47,21 @@ type MetricsRecordBase struct {
 func InsertMetrics(ctx context.Context, s *Storage, metricsMap map[pmetric.MetricType]MetricsModel) error {
 	errsChan := make(chan error, len(metricsMap))
 	wg := &sync.WaitGroup{}
-	for _, m := range metricsMap {
+	for _, metricsModel := range metricsMap {
 		wg.Add(1)
-		go func(m MetricsModel, wg *sync.WaitGroup) {
-			errsChan <- m.insert(ctx, s.DB)
+		go func(metricsModel MetricsModel, wg *sync.WaitGroup) {
+			errsChan <- metricsModel.insert(ctx, s.DB)
 			wg.Done()
-		}(m, wg)
+		}(metricsModel, wg)
 	}
 	wg.Wait()
 	close(errsChan)
+
 	var errs error
 	for err := range errsChan {
 		errs = errors.Join(errs, err)
 	}
+
 	return errs
 }
 
@@ -82,26 +86,34 @@ func NewMetricsModel(s *Storage) map[pmetric.MetricType]MetricsModel {
 	}
 }
 
-func IngestMetricsData(ctx context.Context, s *Storage, md pmetric.Metrics) error {
+func IngestMetricsData(ctx context.Context, s *Storage, metrics pmetric.Metrics) error {
 	metricsMap := NewMetricsModel(s)
 
-	for i := 0; i < md.ResourceMetrics().Len(); i++ {
-		metrics := md.ResourceMetrics().At(i)
-		resAttr := metrics.Resource().Attributes()
-		for j := 0; j < metrics.ScopeMetrics().Len(); j++ {
-			rs := metrics.ScopeMetrics().At(j).Metrics()
-			scopeInstr := metrics.ScopeMetrics().At(j).Scope()
-			scopeURL := metrics.ScopeMetrics().At(j).SchemaUrl()
-			for k := 0; k < rs.Len(); k++ {
-				r := rs.At(k)
-				if r.Type() == pmetric.MetricTypeEmpty {
+	for i := 0; i < metrics.ResourceMetrics().Len(); i++ {
+		resMetrics := metrics.ResourceMetrics().At(i)
+
+		resSchemaUrl := resMetrics.SchemaUrl()
+		resAttrs := resMetrics.Resource().Attributes()
+
+		for j := 0; j < resMetrics.ScopeMetrics().Len(); j++ {
+			scopeMetrics := resMetrics.ScopeMetrics().At(j)
+
+			scopeSchemaUrl := scopeMetrics.SchemaUrl()
+			scope := scopeMetrics.Scope()
+
+			for k := 0; k < scopeMetrics.Metrics().Len(); k++ {
+				metric := scopeMetrics.Metrics().At(k)
+
+				if metric.Type() == pmetric.MetricTypeEmpty {
 					return errors.New("metrics type is unset")
 				}
-				m, ok := metricsMap[r.Type()]
+
+				metricsModel, ok := metricsMap[metric.Type()]
 				if !ok {
 					return errors.New("unsupported metrics type")
 				}
-				m.Add(resAttr, metrics.SchemaUrl(), scopeInstr, scopeURL, r)
+
+				metricsModel.Add(resSchemaUrl, resAttrs, scopeSchemaUrl, scope, metric)
 			}
 		}
 	}

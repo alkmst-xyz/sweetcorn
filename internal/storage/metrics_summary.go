@@ -77,34 +77,38 @@ LIMIT
 )
 
 type summaryModel struct {
-	metricName        string
-	metricDescription string
-	metricUnit        string
-	metadata          *MetricsMetaData
-	summary           pmetric.Summary
+	baseMetricsModel
+	summary pmetric.Summary
 }
 
 type summaryMetrics struct {
-	summaryModel []*summaryModel
-	insertSQL    string
-	count        int
+	data      []*summaryModel
+	count     int
+	insertSQL string
 }
 
-func (s *summaryMetrics) Add(resAttr pcommon.Map, resURL string, scopeInstr pcommon.InstrumentationScope, scopeURL string, metrics pmetric.Metric) {
+func (s *summaryMetrics) Add(
+	resSchemaUrl string,
+	resAttrs pcommon.Map,
+	scopeURL string,
+	scopeInstr pcommon.InstrumentationScope,
+	metrics pmetric.Metric,
+) {
 	summary := metrics.Summary()
 	s.count += summary.DataPoints().Len()
-	s.summaryModel = append(s.summaryModel, &summaryModel{
-		metricName:        metrics.Name(),
-		metricDescription: metrics.Description(),
-		metricUnit:        metrics.Unit(),
-		metadata: &MetricsMetaData{
-			ResAttr:    resAttr,
-			ResURL:     resURL,
-			ScopeURL:   scopeURL,
-			ScopeInstr: scopeInstr,
-		},
-		summary: summary,
-	})
+	s.data = append(s.data,
+		&summaryModel{
+			baseMetricsModel: baseMetricsModel{
+				resSchemaUrl:   resSchemaUrl,
+				resAttrs:       resAttrs,
+				scopeSchemaUrl: scopeURL,
+				scope:          scopeInstr,
+				name:           metrics.Name(),
+				description:    metrics.Description(),
+				unit:           metrics.Unit(),
+			},
+			summary: summary,
+		})
 }
 
 func (s *summaryMetrics) insert(ctx context.Context, db *sql.DB) error {
@@ -112,34 +116,35 @@ func (s *summaryMetrics) insert(ctx context.Context, db *sql.DB) error {
 		return nil
 	}
 
-	for _, model := range s.summaryModel {
-		resAttr := model.metadata.ResAttr
-		serviceName := getServiceName(resAttr)
-
-		resAttrBytes, resAttrErr := json.Marshal(resAttr.AsRaw())
-		if resAttrErr != nil {
-			return fmt.Errorf("failed to marshal json metric resource attributes: %w", resAttrErr)
+	for _, model := range s.data {
+		resAttrs := model.resAttrs
+		resServiceName := getServiceName(resAttrs)
+		resAttrsBytes, resAttrsErr := json.Marshal(resAttrs.AsRaw())
+		if resAttrsErr != nil {
+			return fmt.Errorf("failed to marshal json metric resource attributes: %w", resAttrsErr)
 		}
-		for i := 0; i < model.summary.DataPoints().Len(); i++ {
-			dp := model.summary.DataPoints().At(i)
 
-			attrBytes, attrErr := json.Marshal(dp.Attributes())
-			if attrErr != nil {
-				return fmt.Errorf("failed to marshal json metric attributes: %w", attrErr)
+		dataPoints := model.summary.DataPoints()
+		for i := 0; i < dataPoints.Len(); i++ {
+			dp := dataPoints.At(i)
+
+			dpAttrsBytes, dpAttrsErr := json.Marshal(dp.Attributes())
+			if dpAttrsErr != nil {
+				return fmt.Errorf("failed to marshal json metric attributes: %w", dpAttrsErr)
 			}
 
 			quantiles, values := convertValueAtQuantile(dp.QuantileValues())
 
 			_, err := db.ExecContext(ctx, s.insertSQL,
 				dp.Timestamp().AsTime(),
-				serviceName,
-				model.metricName,
-				model.metricDescription,
-				model.metricUnit,
-				resAttrBytes,
-				model.metadata.ScopeInstr.Name(),
-				model.metadata.ScopeInstr.Version(),
-				attrBytes,
+				resServiceName,
+				model.name,
+				model.description,
+				model.unit,
+				resAttrsBytes,
+				model.scope.Name(),
+				model.scope.Version(),
+				dpAttrsBytes,
 				dp.Count(),
 				dp.Sum(),
 				quantiles,

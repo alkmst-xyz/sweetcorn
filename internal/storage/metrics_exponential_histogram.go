@@ -95,34 +95,39 @@ LIMIT
 )
 
 type expHistogramModel struct {
-	metricName        string
-	metricDescription string
-	metricUnit        string
-	metadata          *MetricsMetaData
-	expHistogram      pmetric.ExponentialHistogram
+	baseMetricsModel
+	expHistogram pmetric.ExponentialHistogram
 }
 
 type expHistogramMetrics struct {
-	expHistogramModels []*expHistogramModel
-	insertSQL          string
-	count              int
+	data      []*expHistogramModel
+	count     int
+	insertSQL string
 }
 
-func (e *expHistogramMetrics) Add(resAttr pcommon.Map, resURL string, scopeInstr pcommon.InstrumentationScope, scopeURL string, metrics pmetric.Metric) {
-	expHistogram := metrics.ExponentialHistogram()
+func (e *expHistogramMetrics) Add(
+	resSchemaUrl string,
+	resAttrs pcommon.Map,
+	scopeSchemaUrl string,
+	scope pcommon.InstrumentationScope,
+	metric pmetric.Metric,
+
+) {
+	expHistogram := metric.ExponentialHistogram()
 	e.count += expHistogram.DataPoints().Len()
-	e.expHistogramModels = append(e.expHistogramModels, &expHistogramModel{
-		metricName:        metrics.Name(),
-		metricDescription: metrics.Description(),
-		metricUnit:        metrics.Unit(),
-		metadata: &MetricsMetaData{
-			ResAttr:    resAttr,
-			ResURL:     resURL,
-			ScopeURL:   scopeURL,
-			ScopeInstr: scopeInstr,
-		},
-		expHistogram: expHistogram,
-	})
+	e.data = append(e.data,
+		&expHistogramModel{
+			baseMetricsModel: baseMetricsModel{
+				resAttrs:       resAttrs,
+				resSchemaUrl:   resSchemaUrl,
+				scopeSchemaUrl: scopeSchemaUrl,
+				scope:          scope,
+				name:           metric.Name(),
+				description:    metric.Description(),
+				unit:           metric.Unit(),
+			},
+			expHistogram: expHistogram,
+		})
 }
 
 func (e *expHistogramMetrics) insert(ctx context.Context, db *sql.DB) error {
@@ -130,33 +135,33 @@ func (e *expHistogramMetrics) insert(ctx context.Context, db *sql.DB) error {
 		return nil
 	}
 
-	for _, model := range e.expHistogramModels {
-		resAttr := model.metadata.ResAttr
-		serviceName := getServiceName(resAttr)
-
-		resAttrBytes, resAttrErr := json.Marshal(resAttr.AsRaw())
-		if resAttrErr != nil {
-			return fmt.Errorf("failed to marshal json metric resource attributes: %w", resAttrErr)
+	for _, model := range e.data {
+		resAttrs := model.resAttrs
+		resServiceName := getServiceName(resAttrs)
+		resAttrsBytes, resAttrsErr := json.Marshal(resAttrs.AsRaw())
+		if resAttrsErr != nil {
+			return fmt.Errorf("failed to marshal json metric resource attributes: %w", resAttrsErr)
 		}
 
-		for i := 0; i < model.expHistogram.DataPoints().Len(); i++ {
-			dp := model.expHistogram.DataPoints().At(i)
+		dataPoints := model.expHistogram.DataPoints()
+		for i := 0; i < dataPoints.Len(); i++ {
+			dp := dataPoints.At(i)
 
-			attrBytes, attrErr := json.Marshal(dp.Attributes())
-			if attrErr != nil {
-				return fmt.Errorf("failed to marshal json metric attributes: %w", attrErr)
+			dpAttrsBytes, dpAttrsErr := json.Marshal(dp.Attributes())
+			if dpAttrsErr != nil {
+				return fmt.Errorf("failed to marshal json metric attributes: %w", dpAttrsErr)
 			}
 
 			_, err := db.ExecContext(ctx, e.insertSQL,
 				dp.Timestamp().AsTime(),
-				serviceName,
-				model.metricName,
-				model.metricDescription,
-				model.metricUnit,
-				resAttrBytes,
-				model.metadata.ScopeInstr.Name(),
-				model.metadata.ScopeInstr.Version(),
-				attrBytes,
+				resServiceName,
+				model.name,
+				model.description,
+				model.unit,
+				resAttrsBytes,
+				model.scope.Name(),
+				model.scope.Version(),
+				dpAttrsBytes,
 				dp.Count(),
 				dp.Sum(),
 				dp.Scale(),

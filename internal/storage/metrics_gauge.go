@@ -67,34 +67,38 @@ LIMIT
 )
 
 type gaugeModel struct {
-	metricName        string
-	metricDescription string
-	metricUnit        string
-	metadata          *MetricsMetaData
-	gauge             pmetric.Gauge
+	baseMetricsModel
+	gauge pmetric.Gauge
 }
 
 type gaugeMetrics struct {
-	gaugeModels []*gaugeModel
-	insertSQL   string
-	count       int
+	data      []*gaugeModel
+	count     int
+	insertSQL string
 }
 
-func (g *gaugeMetrics) Add(resAttr pcommon.Map, resURL string, scopeInstr pcommon.InstrumentationScope, scopeURL string, metrics pmetric.Metric) {
-	gauge := metrics.Gauge()
+func (g *gaugeMetrics) Add(
+	resSchemaUrl string,
+	resAttrs pcommon.Map,
+	scopeSchemaUrl string,
+	scope pcommon.InstrumentationScope,
+	metric pmetric.Metric,
+) {
+	gauge := metric.Gauge()
 	g.count += gauge.DataPoints().Len()
-	g.gaugeModels = append(g.gaugeModels, &gaugeModel{
-		metricName:        metrics.Name(),
-		metricDescription: metrics.Description(),
-		metricUnit:        metrics.Unit(),
-		metadata: &MetricsMetaData{
-			ResAttr:    resAttr,
-			ResURL:     resURL,
-			ScopeURL:   scopeURL,
-			ScopeInstr: scopeInstr,
-		},
-		gauge: gauge,
-	})
+	g.data = append(g.data,
+		&gaugeModel{
+			baseMetricsModel: baseMetricsModel{
+				resSchemaUrl:   resSchemaUrl,
+				resAttrs:       resAttrs,
+				scopeSchemaUrl: scopeSchemaUrl,
+				scope:          scope,
+				name:           metric.Name(),
+				description:    metric.Description(),
+				unit:           metric.Unit(),
+			},
+			gauge: gauge,
+		})
 }
 
 func (g *gaugeMetrics) insert(ctx context.Context, db *sql.DB) error {
@@ -102,33 +106,33 @@ func (g *gaugeMetrics) insert(ctx context.Context, db *sql.DB) error {
 		return nil
 	}
 
-	for _, model := range g.gaugeModels {
-		resAttr := model.metadata.ResAttr
-		serviceName := getServiceName(resAttr)
-
-		resAttrBytes, resAttrErr := json.Marshal(resAttr.AsRaw())
-		if resAttrErr != nil {
-			return fmt.Errorf("failed to marshal json metric resource attributes: %w", resAttrErr)
+	for _, model := range g.data {
+		resAttrs := model.resAttrs
+		resServiceName := getServiceName(resAttrs)
+		resAttrsBytes, resAttrsErr := json.Marshal(resAttrs.AsRaw())
+		if resAttrsErr != nil {
+			return fmt.Errorf("failed to marshal json metric resource attributes: %w", resAttrsErr)
 		}
 
-		for i := 0; i < model.gauge.DataPoints().Len(); i++ {
-			dp := model.gauge.DataPoints().At(i)
+		dataPoints := model.gauge.DataPoints()
+		for i := 0; i < dataPoints.Len(); i++ {
+			dp := dataPoints.At(i)
 
-			attrBytes, attrErr := json.Marshal(dp.Attributes())
-			if attrErr != nil {
-				return fmt.Errorf("failed to marshal json metric attributes: %w", attrErr)
+			dpAttrsBytes, dpAttrsErr := json.Marshal(dp.Attributes())
+			if dpAttrsErr != nil {
+				return fmt.Errorf("failed to marshal json metric attributes: %w", dpAttrsErr)
 			}
 
 			_, err := db.ExecContext(ctx, g.insertSQL,
 				dp.Timestamp().AsTime(),
-				serviceName,
-				model.metricName,
-				model.metricDescription,
-				model.metricUnit,
-				resAttrBytes,
-				model.metadata.ScopeInstr.Name(),
-				model.metadata.ScopeInstr.Version(),
-				attrBytes,
+				resServiceName,
+				model.name,
+				model.description,
+				model.unit,
+				resAttrsBytes,
+				model.scope.Name(),
+				model.scope.Version(),
+				dpAttrsBytes,
 				getValue(dp.IntValue(), dp.DoubleValue(), dp.ValueType()),
 			)
 			if err != nil {
