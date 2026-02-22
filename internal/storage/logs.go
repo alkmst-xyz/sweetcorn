@@ -104,42 +104,40 @@ type LogRecord struct {
 
 // TODO: add storage as receiver
 // TODO: move db, insertSQL to storage receiver
-func InsertLogsData(ctx context.Context, db *sql.DB, insertLogsSQL string, ld plog.Logs) error {
-	rsLogs := ld.ResourceLogs()
-	for i := range rsLogs.Len() {
-		logs := rsLogs.At(i)
+func InsertLogsData(ctx context.Context, db *sql.DB, insertLogsSQL string, logs plog.Logs) error {
+	resLogsSlice := logs.ResourceLogs()
+	for i := range resLogsSlice.Len() {
+		resLogs := resLogsSlice.At(i)
 
-		res := logs.Resource()
-		resURL := logs.SchemaUrl()
-		resAttr := res.Attributes()
-		serviceName := getServiceName(resAttr)
-
-		resAttrBytes, resAttrErr := json.Marshal(resAttr.AsRaw())
-		if resAttrErr != nil {
-			return fmt.Errorf("failed to marshal json log resource attributes: %w", resAttrErr)
+		resSchemaUrl := resLogs.SchemaUrl()
+		resAttrs := resLogs.Resource().Attributes()
+		resServiceName := getServiceName(resAttrs)
+		resAttrsBytes, resAttrsErr := json.Marshal(resAttrs.AsRaw())
+		if resAttrsErr != nil {
+			return fmt.Errorf("failed to marshal json log resource attributes: %w", resAttrsErr)
 		}
 
-		for j := range logs.ScopeLogs().Len() {
-			scopeLog := logs.ScopeLogs().At(j)
-			scopeURL := scopeLog.SchemaUrl()
+		scopeLogsSlice := resLogs.ScopeLogs()
+		for j := range scopeLogsSlice.Len() {
+			scopeLogs := scopeLogsSlice.At(j)
 
-			scopeLogScope := scopeLog.Scope()
-			scopeName := scopeLogScope.Name()
-			scopeVersion := scopeLogScope.Version()
+			scope := scopeLogs.Scope()
+			scopeName := scope.Name()
+			scopeVersion := scope.Version()
+			scopeSchemaUrl := scopeLogs.SchemaUrl()
 
-			scopeLogRecords := scopeLog.LogRecords()
-
-			scopeAttrBytes, scopeAttrErr := json.Marshal(scopeLogScope.Attributes().AsRaw())
+			scopeAttrBytes, scopeAttrErr := json.Marshal(scope.Attributes().AsRaw())
 			if scopeAttrErr != nil {
 				return fmt.Errorf("failed to marshal json log scope attributes: %w", scopeAttrErr)
 			}
 
-			for k := range scopeLogRecords.Len() {
-				logRecord := scopeLogRecords.At(k)
+			logRecordsSlice := scopeLogs.LogRecords()
+			for k := range logRecordsSlice.Len() {
+				logRecord := logRecordsSlice.At(k)
 
-				logAttrBytes, logAttrErr := json.Marshal(logRecord.Attributes().AsRaw())
-				if logAttrErr != nil {
-					return fmt.Errorf("failed to marshal json log attributes: %w", logAttrErr)
+				logAttrsBytes, logAttrsErr := json.Marshal(logRecord.Attributes().AsRaw())
+				if logAttrsErr != nil {
+					return fmt.Errorf("failed to marshal json log attributes: %w", logAttrsErr)
 				}
 
 				timestamp := logRecord.Timestamp()
@@ -154,15 +152,15 @@ func InsertLogsData(ctx context.Context, db *sql.DB, insertLogsSQL string, ld pl
 					logRecord.Flags(),
 					logRecord.SeverityText(),
 					uint8(logRecord.SeverityNumber()),
-					serviceName,
+					resServiceName,
 					logRecord.Body().AsString(),
-					resURL,
-					resAttrBytes,
-					scopeURL,
+					resSchemaUrl,
+					resAttrsBytes,
+					scopeSchemaUrl,
 					scopeName,
 					scopeVersion,
 					scopeAttrBytes,
-					logAttrBytes,
+					logAttrsBytes,
 					logRecord.EventName(),
 				)
 				if err != nil {
