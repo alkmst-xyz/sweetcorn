@@ -3,21 +3,25 @@ import { API_BASE } from './utils';
 
 export type LogRecord = {
 	timestamp: number;
+	timestampObserved: number;
+	severityNumber: number;
+	severityText: string;
+	body: string;
+	logAttributes: { [key: string]: unknown };
+	logDroppedAttributesCount: number;
+	flags: number;
 	traceId: string;
 	spanId: string;
-	traceFlags: number;
-	severityText: string;
-	severityNumber: number;
-	serviceName: string;
-	body: string;
-	resourceSchemaUrl: string;
+	eventName: string;
 	resourceAttributes: { [key: string]: unknown };
-	scopeSchemaUrl: string;
+	resourceDroppedAttributesCount: number;
+	resourceServiceName: string;
+	resourceSchemaUrl: string;
 	scopeName: string;
 	scopeVersion: string;
 	scopeAttributes: { [key: string]: unknown };
-	logAttributes: { [key: string]: unknown };
-	eventName: string;
+	scopeDroppedAttributesCount: number;
+	scopeSchemaUrl: string;
 };
 
 export async function getLogs(fetch: FetchType) {
