@@ -16,152 +16,168 @@ const (
 	createLogsTableSQL = `
 CREATE TABLE IF NOT EXISTS
 	%s (
-		ts						TIMESTAMP_NS,
-		trace_id				VARCHAR,
-		span_id					VARCHAR,
-		trace_flags				UINTEGER,
-		severity_text			VARCHAR,
-		severity_number			UTINYINT,
-		service_name			VARCHAR,
-		body					VARCHAR,
-		resource_schema_url		VARCHAR,
-		resource_attributes		JSON,
-		scope_schema_url 		VARCHAR,
-		scope_name				VARCHAR,
-		scope_version			VARCHAR,
-		scope_attributes		JSON,
-		log_attributes			JSON,
-		event_name				VARCHAR
+		time_unix_nano						TIMESTAMP_NS,
+		observed_time_unix_nano				TIMESTAMP_NS,
+		severity_number						INT32,
+		severity_text						VARCHAR,
+		body								VARCHAR,
+		log_attributes						JSON,
+		log_dropped_attributes_count		UINT32,
+		flags								UINT32,
+		trace_id							VARCHAR,
+		span_id								VARCHAR,
+		event_name							VARCHAR,
+		resource_attributes					JSON,
+		resource_dropped_attributes_count	UINT32,
+		resource_service_name				VARCHAR,
+		resource_schema_url					VARCHAR,
+		scope_name							VARCHAR,
+		scope_version						VARCHAR,
+		scope_attributes					JSON,
+		scope_dropped_attributes_count		UINT32,
+		scope_schema_url					VARCHAR
 	);`
 
 	insertLogsSQL = `
 INSERT INTO
 	%s (
-		ts,
+		time_unix_nano,
+		observed_time_unix_nano,
+		severity_number,
+		severity_text,
+		body,
+		log_attributes,
+		log_dropped_attributes_count,
+		flags,
 		trace_id,
 		span_id,
-		trace_flags,
-		severity_text,
-		severity_number,
-		service_name,
-		body,
-		resource_schema_url,
+		event_name,
 		resource_attributes,
-		scope_schema_url,
+		resource_dropped_attributes_count,
+		resource_service_name,
+		resource_schema_url,
 		scope_name,
 		scope_version,
 		scope_attributes,
-		log_attributes,
-		event_name
+		scope_dropped_attributes_count,
+		scope_schema_url
 	)
 VALUES
-	(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
+	(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
 	queryLogsSQL = `
 SELECT
-	ts,
+	time_unix_nano,
+	observed_time_unix_nano,
+	severity_number,
+	severity_text,
+	body,
+	log_attributes,
+	log_dropped_attributes_count,
+	flags,
 	trace_id,
 	span_id,
-	trace_flags,
-	severity_text,
-	severity_number,
-	service_name,
-	body,
-	resource_schema_url,
+	event_name,
 	resource_attributes,
-	scope_schema_url,
+	resource_dropped_attributes_count,
+	resource_service_name,
+	resource_schema_url,
 	scope_name,
 	scope_version,
 	scope_attributes,
-	log_attributes,
-	event_name
+	scope_dropped_attributes_count,
+	scope_schema_url
 FROM
 	%s
 ORDER BY
-	ts DESC
+	time_unix_nano DESC
 LIMIT
 	100;`
 )
 
 type LogRecord struct {
-	Timestamp          int64          `json:"timestamp"`
-	TraceId            string         `json:"traceId"`
-	SpanId             string         `json:"spanId"`
-	TraceFlags         uint32         `json:"traceFlags"`
-	SeverityText       string         `json:"severityText"`
-	SeverityNumber     uint8          `json:"severityNumber"`
-	ServiceName        string         `json:"serviceName"`
-	Body               string         `json:"body"`
-	ResourceSchemaUrl  string         `json:"resourceSchemaUrl"`
-	ResourceAttributes map[string]any `json:"resourceAttributes"`
-	ScopeSchemaUrl     string         `json:"scopeSchemaUrl"`
-	ScopeName          string         `json:"scopeName"`
-	ScopeVersion       string         `json:"scopeVersion"`
-	ScopeAttributes    map[string]any `json:"scopeAttributes"`
-	LogAttributes      map[string]any `json:"logAttributes"`
-	EventName          string         `json:"eventName"`
+	Timestamp                      int64          `json:"timestamp"`
+	TimestampObserved              int64          `json:"timestampObserved"`
+	SeverityNumber                 int32          `json:"severityNumber"`
+	SeverityText                   string         `json:"severityText"`
+	Body                           string         `json:"body"`
+	LogAttributes                  map[string]any `json:"logAttributes"`
+	LogDroppedAttributesCount      uint32         `json:"logDroppedAttributesCount"`
+	Flags                          uint32         `json:"flags"`
+	TraceId                        string         `json:"traceId"`
+	SpanId                         string         `json:"spanId"`
+	EventName                      string         `json:"eventName"`
+	ResourceAttributes             map[string]any `json:"resourceAttributes"`
+	ResourceDroppedAttributesCount uint32         `json:"resourceDroppedAttributesCount"`
+	ResourceServiceName            string         `json:"resourceServiceName"`
+	ResourceSchemaUrl              string         `json:"resourceSchemaUrl"`
+	ScopeName                      string         `json:"scopeName"`
+	ScopeVersion                   string         `json:"scopeVersion"`
+	ScopeAttributes                map[string]any `json:"scopeAttributes"`
+	ScopeDroppedAttributesCount    uint32         `json:"scopeDroppedAttributesCount"`
+	ScopeSchemaUrl                 string         `json:"scopeSchemaUrl"`
 }
 
 // TODO: add storage as receiver
 // TODO: move db, insertSQL to storage receiver
-func InsertLogsData(ctx context.Context, db *sql.DB, insertLogsSQL string, logs plog.Logs) error {
-	resLogsSlice := logs.ResourceLogs()
-	for i := range resLogsSlice.Len() {
-		resLogs := resLogsSlice.At(i)
+func InsertLogsData(ctx context.Context, db *sql.DB, insertLogsSQL string, logsData plog.Logs) error {
+	for i := range logsData.ResourceLogs().Len() {
+		resLogs := logsData.ResourceLogs().At(i)
 
 		resSchemaUrl := resLogs.SchemaUrl()
 		resAttrs := resLogs.Resource().Attributes()
+		resDroppedAttributesCount := resLogs.Resource().DroppedAttributesCount()
 		resServiceName := getServiceName(resAttrs)
 		resAttrsBytes, resAttrsErr := json.Marshal(resAttrs.AsRaw())
 		if resAttrsErr != nil {
 			return fmt.Errorf("failed to marshal json log resource attributes: %w", resAttrsErr)
 		}
 
-		scopeLogsSlice := resLogs.ScopeLogs()
-		for j := range scopeLogsSlice.Len() {
-			scopeLogs := scopeLogsSlice.At(j)
+		for j := range resLogs.ScopeLogs().Len() {
+			scopeLogs := resLogs.ScopeLogs().At(j)
 
+			scopeSchemaUrl := scopeLogs.SchemaUrl()
 			scope := scopeLogs.Scope()
 			scopeName := scope.Name()
 			scopeVersion := scope.Version()
-			scopeSchemaUrl := scopeLogs.SchemaUrl()
-
-			scopeAttrBytes, scopeAttrErr := json.Marshal(scope.Attributes().AsRaw())
-			if scopeAttrErr != nil {
-				return fmt.Errorf("failed to marshal json log scope attributes: %w", scopeAttrErr)
+			scopeAttrs := scope.Attributes()
+			scopeDroppedAttributesCount := scope.DroppedAttributesCount()
+			scopeAttrsBytes, scopeAttrsErr := json.Marshal(scopeAttrs.AsRaw())
+			if scopeAttrsErr != nil {
+				return fmt.Errorf("failed to marshal json log scope attributes: %w", scopeAttrsErr)
 			}
 
-			logRecordsSlice := scopeLogs.LogRecords()
-			for k := range logRecordsSlice.Len() {
-				logRecord := logRecordsSlice.At(k)
+			for k := range scopeLogs.LogRecords().Len() {
+				logRecord := scopeLogs.LogRecords().At(k)
 
-				logAttrsBytes, logAttrsErr := json.Marshal(logRecord.Attributes().AsRaw())
+				logAttrs := logRecord.Attributes()
+				logDroppedAttributesCount := logRecord.DroppedAttributesCount()
+				logAttrsBytes, logAttrsErr := json.Marshal(logAttrs.AsRaw())
 				if logAttrsErr != nil {
 					return fmt.Errorf("failed to marshal json log attributes: %w", logAttrsErr)
 				}
 
-				timestamp := logRecord.Timestamp()
-				if timestamp == 0 {
-					timestamp = logRecord.ObservedTimestamp()
-				}
-
 				_, err := db.ExecContext(ctx, insertLogsSQL,
-					timestamp.AsTime(),
+					logRecord.Timestamp().AsTime(),
+					logRecord.ObservedTimestamp().AsTime(),
+					logRecord.SeverityNumber(),
+					logRecord.SeverityText(),
+					logRecord.Body().AsString(), // TODO: body type is lost here.
+					logAttrsBytes,
+					logDroppedAttributesCount,
+					logRecord.Flags(),
 					logRecord.TraceID().String(),
 					logRecord.SpanID().String(),
-					logRecord.Flags(),
-					logRecord.SeverityText(),
-					uint8(logRecord.SeverityNumber()),
-					resServiceName,
-					logRecord.Body().AsString(),
-					resSchemaUrl,
+					logRecord.EventName(),
 					resAttrsBytes,
-					scopeSchemaUrl,
+					resDroppedAttributesCount,
+					resServiceName,
+					resSchemaUrl,
 					scopeName,
 					scopeVersion,
-					scopeAttrBytes,
-					logAttrsBytes,
-					logRecord.EventName(),
+					scopeAttrsBytes,
+					scopeDroppedAttributesCount,
+					scopeSchemaUrl,
 				)
 				if err != nil {
 					return err
@@ -186,24 +202,29 @@ func QueryLogs(ctx context.Context, s *Storage) ([]LogRecord, error) {
 		var result LogRecord
 
 		var timestamp time.Time
+		var timestampObserved time.Time
 
 		err := rows.Scan(
 			&timestamp,
+			&timestampObserved,
+			&result.SeverityNumber,
+			&result.SeverityText,
+			&result.Body,
+			&result.LogAttributes,
+			&result.LogDroppedAttributesCount,
+			&result.Flags,
 			&result.TraceId,
 			&result.SpanId,
-			&result.TraceFlags,
-			&result.SeverityText,
-			&result.SeverityNumber,
-			&result.ServiceName,
-			&result.Body,
-			&result.ResourceSchemaUrl,
+			&result.EventName,
 			&result.ResourceAttributes,
-			&result.ScopeSchemaUrl,
+			&result.ResourceDroppedAttributesCount,
+			&result.ResourceServiceName,
+			&result.ResourceSchemaUrl,
 			&result.ScopeName,
 			&result.ScopeVersion,
 			&result.ScopeAttributes,
-			&result.LogAttributes,
-			&result.EventName,
+			&result.ScopeDroppedAttributesCount,
+			&result.ScopeSchemaUrl,
 		)
 		if err != nil {
 			return nil, err

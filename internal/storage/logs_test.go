@@ -97,7 +97,7 @@ func TestInsertLogsDataAndQuery(t *testing.T) {
 			t.Fatalf("Expected %d result, got %d", numLogs, len(results))
 		}
 
-		gotServiceName := results[0].ServiceName
+		gotServiceName := results[0].ResourceServiceName
 		expectedServiceName := getServiceName(logs.ResourceLogs().At(0).Resource().Attributes())
 		if gotServiceName != expectedServiceName {
 			t.Errorf("Expected service name %s, got %s.", expectedServiceName, gotServiceName)
