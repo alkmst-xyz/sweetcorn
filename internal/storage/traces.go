@@ -323,36 +323,35 @@ func RenderDependenciesSQL(tableName string) string {
 	return fmt.Sprintf(dependenciesSQL, tableName, tableName)
 }
 
-func InsertTracesData(ctx context.Context, db *sql.DB, insertTracesSQL string, td ptrace.Traces) error {
-	rsSpans := td.ResourceSpans()
+func InsertTracesData(ctx context.Context, db *sql.DB, insertTracesSQL string, traces ptrace.Traces) error {
+	resSpansSlice := traces.ResourceSpans()
+	for i := range resSpansSlice.Len() {
+		resSpans := resSpansSlice.At(i)
 
-	for i := range rsSpans.Len() {
-		spans := rsSpans.At(i)
-		res := spans.Resource()
-
-		resAttr := res.Attributes()
-		serviceName := getServiceName(resAttr)
-		resAttrBytes, resAttrErr := json.Marshal(resAttr.AsRaw())
+		resAttrs := resSpans.Resource().Attributes()
+		resServiceName := getServiceName(resAttrs)
+		resAttrBytes, resAttrErr := json.Marshal(resAttrs.AsRaw())
 		if resAttrErr != nil {
 			return fmt.Errorf("failed to marshal json trace resource attributes: %w", resAttrErr)
 		}
 
-		for j := range spans.ScopeSpans().Len() {
-			scopeSpanRoot := spans.ScopeSpans().At(j)
-			scopeSpanScope := scopeSpanRoot.Scope()
-			scopeName := scopeSpanScope.Name()
-			scopeVersion := scopeSpanScope.Version()
-			scopeSpans := scopeSpanRoot.Spans()
+		for j := range resSpans.ScopeSpans().Len() {
+			scopeSpans := resSpans.ScopeSpans().At(j)
 
-			for k := range scopeSpans.Len() {
-				span := scopeSpans.At(k)
-				spanStatus := span.Status()
+			scope := scopeSpans.Scope()
+			scopeName := scope.Name()
+			scopeVersion := scope.Version()
 
-				spanDurationNanos := span.EndTimestamp() - span.StartTimestamp()
+			spanSlice := scopeSpans.Spans()
+			for k := range spanSlice.Len() {
+				span := spanSlice.At(k)
 
-				spanAttrBytes, spanAttrErr := json.Marshal(span.Attributes().AsRaw())
-				if spanAttrErr != nil {
-					return fmt.Errorf("failed to marshal json trace span attributes: %w", spanAttrErr)
+				status := span.Status()
+				durationNanoseconds := span.EndTimestamp() - span.StartTimestamp()
+
+				spanAttrsBytes, spanAttrsErr := json.Marshal(span.Attributes().AsRaw())
+				if spanAttrsErr != nil {
+					return fmt.Errorf("failed to marshal json trace span attributes: %w", spanAttrsErr)
 				}
 
 				eventTimes, eventNames, eventAttrs, eventsErr := convertEvents(span.Events())
@@ -373,14 +372,14 @@ func InsertTracesData(ctx context.Context, db *sql.DB, insertTracesSQL string, t
 					span.TraceState().AsRaw(),
 					span.Name(),
 					span.Kind().String(),
-					serviceName,
+					resServiceName,
 					resAttrBytes,
 					scopeName,
 					scopeVersion,
-					spanAttrBytes,
-					spanDurationNanos,
-					spanStatus.Code().String(),
-					spanStatus.Message(),
+					spanAttrsBytes,
+					durationNanoseconds,
+					status.Code().String(),
+					status.Message(),
 					eventTimes,
 					eventNames,
 					eventAttrs,
