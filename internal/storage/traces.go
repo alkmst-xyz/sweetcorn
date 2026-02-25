@@ -19,93 +19,117 @@ const (
 	createTracesTableSQL = `
 CREATE TABLE IF NOT EXISTS
 	%s (
-		ts						TIMESTAMP_NS,
-		trace_id				VARCHAR,
-		span_id					VARCHAR,
-		parent_span_id			VARCHAR,
-		trace_state				VARCHAR,
-		span_name				VARCHAR,
-		span_kind				VARCHAR,
-		service_name			VARCHAR,
-		resource_attributes		JSON,
-		scope_name				VARCHAR,
-		scope_version			VARCHAR,
-		span_attributes			JSON,
-		duration				UBIGINT,
-		status_code				VARCHAR,
-		status_message			VARCHAR,
-		events_timestamps		TIMESTAMP_NS[],
-		events_names			VARCHAR[],
-		events_attributes		JSON[],
-		links_trace_ids			VARCHAR[],
-		links_span_ids			VARCHAR[],
-		links_trace_states		VARCHAR[],
-		links_attributes		JSON[]
+		trace_id							VARCHAR,
+		span_id								VARCHAR,
+		trace_state							VARCHAR,
+		parent_span_id						VARCHAR,
+		flags								UINT32,
+		name								VARCHAR,
+		kind								INT32,
+		start_time_unix_nano				TIMESTAMP_NS,
+		duration_nano						UINT64,
+		span_attributes						JSON,
+		span_dropped_attributes_count		UINT32,
+    	events_time_unix_nano				TIMESTAMP_NS[],
+    	events_name							VARCHAR[],
+    	events_attributes					JSON[],
+    	events_dropped_attributes_count		UINT32[],
+		dropped_events_count				UINT32,
+		links_trace_id 						VARCHAR[],
+		links_span_id 						VARCHAR[],
+		links_trace_state 					VARCHAR[],
+		links_attributes 					JSON[],
+		links_dropped_attributes_count 		UINT32[],
+		links_flags							UINT32[],
+		dropped_links_count 				UINT32,
+		status_code							INT32,
+		status_message						VARCHAR,
+		resource_attributes					JSON,
+		resource_dropped_attributes_count	UINT32,
+		resource_service_name				VARCHAR,
+		resource_schema_url					VARCHAR,
+		scope_name							VARCHAR,
+		scope_version						VARCHAR,
+		scope_attributes					JSON,
+		scope_dropped_attributes_count		UINT32,
+		scope_schema_url					VARCHAR
 	);`
 
 	insertTracesSQL = `
 INSERT INTO
 	%s (
-		ts,
 		trace_id,
 		span_id,
-		parent_span_id,
 		trace_state,
-		span_name,
-		span_kind,
-		service_name,
-		resource_attributes,
-		scope_name,
-		scope_version,
+		parent_span_id,
+		flags,
+		name,
+		kind,
+		start_time_unix_nano,
+		duration_nano,
 		span_attributes,
-		duration,
+		span_dropped_attributes_count,
+    	events_time_unix_nano,
+    	events_name,
+    	events_attributes,
+    	events_dropped_attributes_count,
+		dropped_events_count,
+		links_trace_id,
+		links_span_id,
+		links_trace_state,
+		links_attributes,
+		links_dropped_attributes_count,
+		links_flags,
+		dropped_links_count,
 		status_code,
 		status_message,
-		events_timestamps,
-		events_names,
-		events_attributes,
-		links_trace_ids,
-		links_span_ids,
-		links_trace_states,
-		links_attributes
+		resource_attributes,
+		resource_dropped_attributes_count,
+		resource_service_name,
+		resource_schema_url,
+		scope_name,
+		scope_version,
+		scope_attributes,
+		scope_dropped_attributes_count,
+		scope_schema_url
 	)
 VALUES
-	(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
+	(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
 	queryTracesSQL = `
 SELECT
-	ts,
+	start_time_unix_nano,
 	trace_id,
 	span_id,
 	parent_span_id,
 	trace_state,
-	span_name,
-	span_kind,
-	service_name,
+	name,
+	kind,
+	resource_service_name,
 	resource_attributes,
 	scope_name,
 	scope_version,
 	span_attributes,
-	duration,
+	duration_nano,
 	status_code,
 	status_message,
-	events_timestamps,
-	events_names,
+	events_time_unix_nano,
+	events_name,
 	events_attributes,
-	links_trace_ids,
-	links_span_ids,
-	links_trace_states,
+	links_trace_id,
+	links_span_id,
+	links_trace_state,
 	links_attributes
 FROM
 	%s
 ORDER BY
-	ts DESC
+	start_time_unix_nano DESC
 LIMIT
 	100;`
 
 	traceServicesSQL = `
 SELECT DISTINCT
-    service_name
+    resource_service_name
 FROM
 	%s
 LIMIT
@@ -113,12 +137,12 @@ LIMIT
 
 	traceOperationsSQL = `
 SELECT DISTINCT
-    span_name
+    name
 FROM
 	%s
 WHERE
-	service_name = ?
-	AND (? = '' OR span_kind = ?)
+	resource_service_name = ?
+	AND (? = '' OR kind = ?)
 LIMIT
 	100;`
 
@@ -136,18 +160,18 @@ SELECT
 			"TraceID" := trace_id,
 			"SpanID" := span_id,
 			"OperationName" := span_name,
-			"StartTime" := epoch_us(ts),
-			"Duration" := duration // 1000,
+			"StartTime" := epoch_us(start_time_unix_nano),
+			"Duration" := duration_nano // 1000,
 			"ParentName" := parent_span_id,
 			"SpanAttributes" := span_attributes,
-			"ScopeName" := scope_name,
-			"SpanKind" := span_kind
+			"ScopeName" := name,
+			"SpanKind" := kind
 		)
 	) as spans
 FROM
 	%s
 WHERE
-	(? IS NULL OR service_name = ?)
+	(? IS NULL OR resource_service_name = ?)
 GROUP BY
 	trace_id
 LIMIT
@@ -160,21 +184,21 @@ SELECT
 		struct_pack(
 			"TraceID" := trace_id,
 			"SpanID" := span_id,
-			"OperationName" := span_name,
-			"StartTime" := epoch_us(ts),
-			"Duration" := duration // 1000,
+			"OperationName" := name,
+			"StartTime" := epoch_us(start_time_unix_nano),
+			"Duration" := duration_nano // 1000,
 			"ParentName" := parent_span_id,
 			"SpanAttributes" := span_attributes,
-			"ScopeName" := scope_name,
-			"SpanKind" := span_kind
+			"ScopeName" := name,
+			"SpanKind" := kind
 		)
 	) as spans
 FROM
 	%s
 WHERE
 	trace_id = ?
-	AND (? = 0 OR epoch_us(ts) >= ?)
-	AND (? = 0 OR epoch_us(ts) <  ?)
+	AND (? = 0 OR epoch_us(start_time_unix_nano) >= ?)
+	AND (? = 0 OR epoch_us(start_time_unix_nano) <  ?)
 GROUP BY
 	trace_id;`
 
@@ -182,13 +206,13 @@ GROUP BY
 SELECT DISTINCT
     (
         SELECT
-            p.service_name
+            p.resource_service_name
         FROM
 			%s AS p
         WHERE
             p.span_id = c.parent_span_id
     ) AS parent_service_name,
-    c.service_name AS child_service_name,
+    c.resource_service_name AS child_service_name,
     COUNT(*) AS count
 FROM
     %s as c
@@ -286,7 +310,13 @@ type DependenciesData struct {
 
 var ErrTraceNotFound = errors.New("trace not found")
 
-func convertEvents(events ptrace.SpanEventSlice) (times []time.Time, names, attrs []string, err error) {
+func convertEvents(events ptrace.SpanEventSlice) (
+	times []time.Time,
+	names []string,
+	attrs []string,
+	droppedAttributesCounts []uint32,
+	err error,
+) {
 	for i := 0; i < events.Len(); i++ {
 		event := events.At(i)
 		times = append(times, event.Timestamp().AsTime())
@@ -294,15 +324,25 @@ func convertEvents(events ptrace.SpanEventSlice) (times []time.Time, names, attr
 
 		eventAttrBytes, eventAttrErr := json.Marshal(event.Attributes().AsRaw())
 		if eventAttrErr != nil {
-			return nil, nil, nil, fmt.Errorf("failed to marshal json trace event attributes: %w", eventAttrErr)
+			return nil, nil, nil, nil, fmt.Errorf("failed to marshal json trace event attributes: %w", eventAttrErr)
 		}
 		attrs = append(attrs, string(eventAttrBytes))
+
+		droppedAttributesCounts = append(droppedAttributesCounts, event.DroppedAttributesCount())
 	}
 
 	return
 }
 
-func convertLinks(links ptrace.SpanLinkSlice) (traceIDs, spanIDs, states, attrs []string, err error) {
+func convertLinks(links ptrace.SpanLinkSlice) (
+	traceIDs []string,
+	spanIDs []string,
+	states []string,
+	attrs []string,
+	droppedAttributesCounts []uint32,
+	flags []uint32,
+	err error,
+) {
 	for i := 0; i < links.Len(); i++ {
 		link := links.At(i)
 		traceIDs = append(traceIDs, link.TraceID().String())
@@ -311,26 +351,24 @@ func convertLinks(links ptrace.SpanLinkSlice) (traceIDs, spanIDs, states, attrs 
 
 		linkAttrBytes, linkAttrErr := json.Marshal(link.Attributes().AsRaw())
 		if linkAttrErr != nil {
-			return nil, nil, nil, nil, fmt.Errorf("failed to marshal json trace link attributes: %w", linkAttrErr)
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to marshal json trace link attributes: %w", linkAttrErr)
 		}
 		attrs = append(attrs, string(linkAttrBytes))
+
+		droppedAttributesCounts = append(droppedAttributesCounts, link.DroppedAttributesCount())
+		flags = append(flags, link.Flags())
 	}
 
 	return
 }
 
-func RenderDependenciesSQL(tableName string) string {
-	return fmt.Sprintf(dependenciesSQL, tableName, tableName)
-}
-
-func InsertTracesData(ctx context.Context, db *sql.DB, insertTracesSQL string, traces ptrace.Traces) error {
-	resSpansSlice := traces.ResourceSpans()
-	for i := range resSpansSlice.Len() {
-		resSpans := resSpansSlice.At(i)
+func InsertTracesData(ctx context.Context, db *sql.DB, insertTracesSQL string, tracesData ptrace.Traces) error {
+	for i := range tracesData.ResourceSpans().Len() {
+		resSpans := tracesData.ResourceSpans().At(i)
 
 		resAttrs := resSpans.Resource().Attributes()
 		resServiceName := getServiceName(resAttrs)
-		resAttrBytes, resAttrErr := json.Marshal(resAttrs.AsRaw())
+		resAttrsBytes, resAttrErr := json.Marshal(resAttrs.AsRaw())
 		if resAttrErr != nil {
 			return fmt.Errorf("failed to marshal json trace resource attributes: %w", resAttrErr)
 		}
@@ -339,54 +377,70 @@ func InsertTracesData(ctx context.Context, db *sql.DB, insertTracesSQL string, t
 			scopeSpans := resSpans.ScopeSpans().At(j)
 
 			scope := scopeSpans.Scope()
-			scopeName := scope.Name()
-			scopeVersion := scope.Version()
+			scopeAttrs := scope.Attributes()
+			scopeAttrsBytes, scopeAttrsErr := json.Marshal(scopeAttrs.AsRaw())
+			if scopeAttrsErr != nil {
+				return fmt.Errorf("failed to marshal json log scope attributes: %w", scopeAttrsErr)
+			}
 
-			spanSlice := scopeSpans.Spans()
-			for k := range spanSlice.Len() {
-				span := spanSlice.At(k)
+			for k := range scopeSpans.Spans().Len() {
+				span := scopeSpans.Spans().At(k)
 
-				status := span.Status()
 				durationNanoseconds := span.EndTimestamp() - span.StartTimestamp()
+				status := span.Status()
 
 				spanAttrsBytes, spanAttrsErr := json.Marshal(span.Attributes().AsRaw())
 				if spanAttrsErr != nil {
 					return fmt.Errorf("failed to marshal json trace span attributes: %w", spanAttrsErr)
 				}
 
-				eventTimes, eventNames, eventAttrs, eventsErr := convertEvents(span.Events())
+				eventsTimeUnixNano, eventsName, eventsAttrs,
+					eventsDroppedAttributesCount, eventsErr := convertEvents(span.Events())
 				if eventsErr != nil {
 					return fmt.Errorf("failed to convert json trace events: %w", eventsErr)
 				}
 
-				linksTraceIDs, linksSpanIDs, linksTraceStates, linksAttrs, linksErr := convertLinks(span.Links())
+				linksTraceID, linksSpanID, linksTraceState, linksAttrs,
+					linksDroppedAttributesCount, linksFlags, linksErr := convertLinks(span.Links())
 				if linksErr != nil {
 					return fmt.Errorf("failed to convert json trace links: %w", linksErr)
 				}
 
 				_, err := db.ExecContext(ctx, insertTracesSQL,
-					span.StartTimestamp().AsTime(),
 					span.TraceID().String(),
 					span.SpanID().String(),
-					span.ParentSpanID().String(),
 					span.TraceState().AsRaw(),
+					span.ParentSpanID().String(),
+					span.Flags(),
 					span.Name(),
-					span.Kind().String(),
-					resServiceName,
-					resAttrBytes,
-					scopeName,
-					scopeVersion,
-					spanAttrsBytes,
+					span.Kind(),
+					span.StartTimestamp().AsTime(),
 					durationNanoseconds,
-					status.Code().String(),
-					status.Message(),
-					eventTimes,
-					eventNames,
-					eventAttrs,
-					linksTraceIDs,
-					linksSpanIDs,
-					linksTraceStates,
+					spanAttrsBytes,
+					span.DroppedAttributesCount(),
+					eventsTimeUnixNano,
+					eventsName,
+					eventsAttrs,
+					eventsDroppedAttributesCount,
+					span.DroppedEventsCount(),
+					linksTraceID,
+					linksSpanID,
+					linksTraceState,
 					linksAttrs,
+					linksDroppedAttributesCount,
+					linksFlags,
+					span.DroppedLinksCount(),
+					status.Code(),
+					status.Message(),
+					resAttrsBytes,
+					resSpans.Resource().DroppedAttributesCount(),
+					resServiceName,
+					resSpans.SchemaUrl(),
+					scope.Name(),
+					scope.Version(),
+					scopeAttrsBytes,
+					scope.DroppedAttributesCount(),
+					scopeSpans.SchemaUrl(),
 				)
 				if err != nil {
 					return err
