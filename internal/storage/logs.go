@@ -138,10 +138,7 @@ func InsertLogsData(ctx context.Context, db *sql.DB, insertLogsSQL string, logsD
 
 			scopeSchemaUrl := scopeLogs.SchemaUrl()
 			scope := scopeLogs.Scope()
-			scopeName := scope.Name()
-			scopeVersion := scope.Version()
 			scopeAttrs := scope.Attributes()
-			scopeDroppedAttributesCount := scope.DroppedAttributesCount()
 			scopeAttrsBytes, scopeAttrsErr := json.Marshal(scopeAttrs.AsRaw())
 			if scopeAttrsErr != nil {
 				return fmt.Errorf("failed to marshal json log scope attributes: %w", scopeAttrsErr)
@@ -151,7 +148,6 @@ func InsertLogsData(ctx context.Context, db *sql.DB, insertLogsSQL string, logsD
 				logRecord := scopeLogs.LogRecords().At(k)
 
 				logAttrs := logRecord.Attributes()
-				logDroppedAttributesCount := logRecord.DroppedAttributesCount()
 				logAttrsBytes, logAttrsErr := json.Marshal(logAttrs.AsRaw())
 				if logAttrsErr != nil {
 					return fmt.Errorf("failed to marshal json log attributes: %w", logAttrsErr)
@@ -164,7 +160,7 @@ func InsertLogsData(ctx context.Context, db *sql.DB, insertLogsSQL string, logsD
 					logRecord.SeverityText(),
 					logRecord.Body().AsString(), // TODO: body type is lost here.
 					logAttrsBytes,
-					logDroppedAttributesCount,
+					logRecord.DroppedAttributesCount(),
 					logRecord.Flags(),
 					logRecord.TraceID().String(),
 					logRecord.SpanID().String(),
@@ -173,10 +169,10 @@ func InsertLogsData(ctx context.Context, db *sql.DB, insertLogsSQL string, logsD
 					resDroppedAttributesCount,
 					resServiceName,
 					resSchemaUrl,
-					scopeName,
-					scopeVersion,
+					scope.Name(),
+					scope.Version(),
 					scopeAttrsBytes,
-					scopeDroppedAttributesCount,
+					scope.DroppedAttributesCount(),
 					scopeSchemaUrl,
 				)
 				if err != nil {
