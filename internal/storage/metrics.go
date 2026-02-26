@@ -42,9 +42,7 @@ type baseMetricsModel struct {
 	scopeAttrsBytes        []byte
 	scopeDroppedAttrsCount uint32
 	scopeSchemaUrl         string
-	name                   string
-	description            string
-	unit                   string
+	metric                 pmetric.Metric
 }
 
 // Query base DTO
@@ -103,6 +101,11 @@ func newMetricsModel(s *Storage) map[pmetric.MetricType]MetricsModel {
 	}
 }
 
+// IngestMetricsData ingests metrics data to storage.
+//
+// Metrics are composed of metadata and data:
+//   - Metadata part contains a name, description, unit.
+//   - Data is one of the possible types (Sum, Gauge, Histogram, ExponentialHistogram, Summary).
 func IngestMetricsData(ctx context.Context, s *Storage, metricsData pmetric.Metrics) error {
 	metricsMap := newMetricsModel(s)
 
@@ -115,8 +118,8 @@ func IngestMetricsData(ctx context.Context, s *Storage, metricsData pmetric.Metr
 		if resAttrsErr != nil {
 			return fmt.Errorf("failed to marshal json metric resource attributes: %w", resAttrsErr)
 		}
-		resSchemaUrl := resMetrics.SchemaUrl()
 		resDroppedAttrsCount := resMetrics.Resource().DroppedAttributesCount()
+		resSchemaUrl := resMetrics.SchemaUrl()
 
 		for j := range resMetrics.ScopeMetrics().Len() {
 			scopeMetrics := resMetrics.ScopeMetrics().At(j)
@@ -125,12 +128,12 @@ func IngestMetricsData(ctx context.Context, s *Storage, metricsData pmetric.Metr
 			scopeName := scope.Name()
 			scopeVersion := scope.Version()
 			scopeAttrs := scope.Attributes()
+			scopeDroppedAttrsCount := scope.DroppedAttributesCount()
 			scopeAttrsBytes, scopeAttrsErr := json.Marshal(scopeAttrs.AsRaw())
 			if scopeAttrsErr != nil {
 				return fmt.Errorf("failed to marshal json metric scope attributes: %w", scopeAttrsErr)
 			}
 			scopeSchemaUrl := scopeMetrics.SchemaUrl()
-			scopeDroppedAttrsCount := scope.DroppedAttributesCount()
 
 			for k := range scopeMetrics.Metrics().Len() {
 				metric := scopeMetrics.Metrics().At(k)

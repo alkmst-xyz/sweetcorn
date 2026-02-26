@@ -13,71 +13,90 @@ import (
 const (
 	DefaultMetricsSumTableName = "otel_metrics_sum"
 
+	// Note: Ducklake uses `FLOAT64` for `DOUBLE`.
 	createMetricsSumTable = `
 CREATE TABLE IF NOT EXISTS
 	%s (
-		timestamp				TIMESTAMP_NS,
-		service_name			VARCHAR,
-		metric_name				VARCHAR,
-		metric_description		VARCHAR,
-		metric_unit				VARCHAR,
-		resource_attributes		JSON,
-		scope_name				VARCHAR,
-		scope_version			VARCHAR,
-		attributes				JSON,
-		value					DOUBLE,
-		aggregation_temporality	INTEGER,
-		is_monotonic			BOOLEAN
+		resource_service_name				VARCHAR,
+		resource_attributes					JSON,
+		resource_dropped_attributes_count	UINT32,
+		resource_schema_url					VARCHAR,
+		scope_name							VARCHAR,
+		scope_version						VARCHAR,
+		scope_attributes					JSON,
+		scope_dropped_attributes_count		UINT32,
+		scope_schema_url					VARCHAR,
+		metric_name							VARCHAR,
+		metric_description					VARCHAR,
+		metric_unit							VARCHAR,
+		metric_metadata						JSON,
+		data_dp_attributes					JSON,
+		data_dp_start_time_unix_nano		TIMESTAMP_NS,
+		data_dp_time_unix_nano				TIMESTAMP_NS,
+		data_dp_value_double				DOUBLE,
+		data_dp_value_int					INT64,
+		data_dp_flags						UINT32,
+		data_aggregation_temporality		INT32,
+		data_is_monotonic					BOOLEAN
 	);`
 
 	insertMetricsSumSQL = `
 INSERT INTO
 	%s (
-		timestamp,
-		service_name,
+		resource_service_name,
+		resource_attributes,
+		resource_dropped_attributes_count,
+		resource_schema_url,
+		scope_name,
+		scope_version,
+		scope_attributes,
+		scope_dropped_attributes_count,
+		scope_schema_url,
 		metric_name,
 		metric_description,
 		metric_unit,
-		resource_attributes,
-		scope_name,
-		scope_version,
-		attributes,
-		value,
-		aggregation_temporality,
-		is_monotonic
+		metric_metadata,
+		data_dp_attributes,
+		data_dp_start_time_unix_nano,
+		data_dp_time_unix_nano,
+		data_dp_value_double,
+		data_dp_value_int,
+		data_dp_flags,
+		data_aggregation_temporality,
+		data_is_monotonic
 	)
 VALUES
-	(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
+	(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
 	queryMetricsSumSQL = `
 SELECT
-	timestamp,
-	service_name,
+	data_dp_time_unix_nano,
+	resource_service_name,
 	metric_name,
 	metric_description,
 	metric_unit,
 	resource_attributes,
 	scope_name,
 	scope_version,
-	attributes,
-	value,
-	aggregation_temporality,
-	is_monotonic
+	data_dp_attributes,
+	data_dp_value_double,
+	data_aggregation_temporality,
+	data_is_monotonic
 FROM
 	%s
 ORDER BY
-	timestamp DESC
+	data_dp_time_unix_nano DESC
 LIMIT
 	100;`
 )
 
-type sumModel struct {
+type sumMetricModel struct {
 	baseMetricsModel
 	sum pmetric.Sum
 }
 
 type sumMetrics struct {
-	data      []*sumModel
+	data      []*sumMetricModel
 	count     int
 	insertSQL string
 }
@@ -97,7 +116,7 @@ func (m *sumMetrics) add(
 	sum := metric.Sum()
 	m.count += sum.DataPoints().Len()
 	m.data = append(m.data,
-		&sumModel{
+		&sumMetricModel{
 			baseMetricsModel: baseMetricsModel{
 				resAttrsBytes:          resAttrsBytes,
 				resDroppedAttrsCount:   resDroppedAttrsCount,
@@ -108,9 +127,7 @@ func (m *sumMetrics) add(
 				scopeAttrsBytes:        scopeAttrsBytes,
 				scopeDroppedAttrsCount: scopeDroppedAttrsCount,
 				scopeSchemaUrl:         scopeSchemaUrl,
-				name:                   metric.Name(),
-				description:            metric.Description(),
-				unit:                   metric.Unit(),
+				metric:                 metric,
 			},
 			sum: sum,
 		})
@@ -122,13 +139,19 @@ func (m *sumMetrics) insert(ctx context.Context, db *sql.DB) error {
 	}
 
 	for _, model := range m.data {
-		dataPoints := model.sum.DataPoints()
-		for i := 0; i < dataPoints.Len(); i++ {
-			dp := dataPoints.At(i)
+		metricName := model.metric.Name()
+		metricDescription := model.metric.Description()
+		metricUnit := model.metric.Unit()
+		metricMetadataBytes, metricMetadataErr := json.Marshal(model.metric.Metadata())
+		if metricMetadataErr != nil {
+			return fmt.Errorf("failed to marshal json metric metadata: %w", metricMetadataErr)
+		}
 
-			value := getValue(dp.IntValue(), dp.DoubleValue(), dp.ValueType())
-			aggTemp := model.sum.AggregationTemporality()
-			isMonotonic := model.sum.IsMonotonic()
+		aggTemp := model.sum.AggregationTemporality()
+		isMonotonic := model.sum.IsMonotonic()
+		dataPoints := model.sum.DataPoints()
+		for i := range dataPoints.Len() {
+			dp := dataPoints.At(i)
 
 			dpAttrsBytes, dpAttrsErr := json.Marshal(dp.Attributes())
 			if dpAttrsErr != nil {
@@ -136,16 +159,26 @@ func (m *sumMetrics) insert(ctx context.Context, db *sql.DB) error {
 			}
 
 			_, err := db.ExecContext(ctx, m.insertSQL,
-				dp.Timestamp().AsTime(),
 				model.resServiceName,
-				model.name,
-				model.description,
-				model.unit,
 				model.resAttrsBytes,
+				model.resDroppedAttrsCount,
+				model.resSchemaUrl,
 				model.scopeName,
 				model.scopeVersion,
+				model.scopeAttrsBytes,
+				model.scopeDroppedAttrsCount,
+				model.scopeSchemaUrl,
+				metricName,
+				metricDescription,
+				metricUnit,
+				metricMetadataBytes,
 				dpAttrsBytes,
-				value,
+				dp.StartTimestamp().AsTime(),
+				dp.Timestamp().AsTime(),
+				dp.DoubleValue(),
+				dp.IntValue(),
+				// exemplars
+				dp.Flags(),
 				aggTemp,
 				isMonotonic,
 			)
