@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/duckdb/duckdb-go/v2"
-	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
@@ -105,44 +104,47 @@ type expHistogramMetrics struct {
 	insertSQL string
 }
 
-func (e *expHistogramMetrics) Add(
+func (m *expHistogramMetrics) add(
+	resAttrsBytes []byte,
+	resDroppedAttrsCount uint32,
+	resServiceName string,
 	resSchemaUrl string,
-	resAttrs pcommon.Map,
+	scopeName string,
+	scopeVersion string,
+	scopeAttrsBytes []byte,
+	scopeDroppedAttrsCount uint32,
 	scopeSchemaUrl string,
-	scope pcommon.InstrumentationScope,
 	metric pmetric.Metric,
 
 ) {
 	expHistogram := metric.ExponentialHistogram()
-	e.count += expHistogram.DataPoints().Len()
-	e.data = append(e.data,
+	m.count += expHistogram.DataPoints().Len()
+	m.data = append(m.data,
 		&expHistogramModel{
 			baseMetricsModel: baseMetricsModel{
-				resAttrs:       resAttrs,
-				resSchemaUrl:   resSchemaUrl,
-				scopeSchemaUrl: scopeSchemaUrl,
-				scope:          scope,
-				name:           metric.Name(),
-				description:    metric.Description(),
-				unit:           metric.Unit(),
+				resAttrsBytes:          resAttrsBytes,
+				resDroppedAttrsCount:   resDroppedAttrsCount,
+				resServiceName:         resServiceName,
+				resSchemaUrl:           resSchemaUrl,
+				scopeName:              scopeName,
+				scopeVersion:           scopeVersion,
+				scopeAttrsBytes:        scopeAttrsBytes,
+				scopeDroppedAttrsCount: scopeDroppedAttrsCount,
+				scopeSchemaUrl:         scopeSchemaUrl,
+				name:                   metric.Name(),
+				description:            metric.Description(),
+				unit:                   metric.Unit(),
 			},
 			expHistogram: expHistogram,
 		})
 }
 
-func (e *expHistogramMetrics) insert(ctx context.Context, db *sql.DB) error {
-	if e.count == 0 {
+func (m *expHistogramMetrics) insert(ctx context.Context, db *sql.DB) error {
+	if m.count == 0 {
 		return nil
 	}
 
-	for _, model := range e.data {
-		resAttrs := model.resAttrs
-		resServiceName := getServiceName(resAttrs)
-		resAttrsBytes, resAttrsErr := json.Marshal(resAttrs.AsRaw())
-		if resAttrsErr != nil {
-			return fmt.Errorf("failed to marshal json metric resource attributes: %w", resAttrsErr)
-		}
-
+	for _, model := range m.data {
 		dataPoints := model.expHistogram.DataPoints()
 		for i := 0; i < dataPoints.Len(); i++ {
 			dp := dataPoints.At(i)
@@ -152,15 +154,15 @@ func (e *expHistogramMetrics) insert(ctx context.Context, db *sql.DB) error {
 				return fmt.Errorf("failed to marshal json metric attributes: %w", dpAttrsErr)
 			}
 
-			_, err := db.ExecContext(ctx, e.insertSQL,
+			_, err := db.ExecContext(ctx, m.insertSQL,
 				dp.Timestamp().AsTime(),
-				resServiceName,
+				model.resServiceName,
 				model.name,
 				model.description,
 				model.unit,
-				resAttrsBytes,
-				model.scope.Name(),
-				model.scope.Version(),
+				model.resAttrsBytes,
+				model.scopeName,
+				model.scopeVersion,
 				dpAttrsBytes,
 				dp.Count(),
 				dp.Sum(),

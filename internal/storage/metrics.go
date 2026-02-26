@@ -3,31 +3,48 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 
-	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 // MetricsModel is used to group metric data and insert into duckdb
 // any type of metrics need implement it.
 type MetricsModel interface {
-	// Add used to bind MetricsMetaData to a specific metric then put them into a slice
-	Add(resSchemaUrl string, resAttrs pcommon.Map, scopeSchemaUrl string, scope pcommon.InstrumentationScope, metric pmetric.Metric)
+	// add used to bind MetricsMetaData to a specific metric then put them into a slice
+	add(
+		resAttrsBytes []byte,
+		resDroppedAttrsCount uint32,
+		resServiceName string,
+		resSchemaUrl string,
+		scopeName string,
+		scopeVersion string,
+		scopeAttrsBytes []byte,
+		scopeDroppedAttrsCount uint32,
+		scopeSchemaUrl string,
+		metric pmetric.Metric,
+	)
 
 	// insert is used to insert metric data to duckdb
 	insert(ctx context.Context, db *sql.DB) error
 }
 
 type baseMetricsModel struct {
-	resSchemaUrl   string
-	resAttrs       pcommon.Map
-	scopeSchemaUrl string
-	scope          pcommon.InstrumentationScope
-	name           string
-	description    string
-	unit           string
+	resAttrsBytes          []byte
+	resDroppedAttrsCount   uint32
+	resServiceName         string
+	resSchemaUrl           string
+	scopeName              string
+	scopeVersion           string
+	scopeAttrsBytes        []byte
+	scopeDroppedAttrsCount uint32
+	scopeSchemaUrl         string
+	name                   string
+	description            string
+	unit                   string
 }
 
 // Query base DTO
@@ -43,8 +60,8 @@ type MetricsRecordBase struct {
 	Attributes         map[string]any `json:"attributes"`
 }
 
-// InsertMetrics insert metric data into duckdb concurrently
-func InsertMetrics(ctx context.Context, s *Storage, metricsMap map[pmetric.MetricType]MetricsModel) error {
+// runIngestMetrics insert metric data concurrently.
+func runIngestMetrics(ctx context.Context, s *Storage, metricsMap map[pmetric.MetricType]MetricsModel) error {
 	errsChan := make(chan error, len(metricsMap))
 	wg := &sync.WaitGroup{}
 	for _, metricsModel := range metricsMap {
@@ -65,8 +82,8 @@ func InsertMetrics(ctx context.Context, s *Storage, metricsMap map[pmetric.Metri
 	return errs
 }
 
-// NewMetricsModel create a model for contain different metric data
-func NewMetricsModel(s *Storage) map[pmetric.MetricType]MetricsModel {
+// newMetricsModel create a model for contain different metric data
+func newMetricsModel(s *Storage) map[pmetric.MetricType]MetricsModel {
 	return map[pmetric.MetricType]MetricsModel{
 		pmetric.MetricTypeGauge: &gaugeMetrics{
 			insertSQL: s.InsertMetricsGaugeSQL,
@@ -86,22 +103,36 @@ func NewMetricsModel(s *Storage) map[pmetric.MetricType]MetricsModel {
 	}
 }
 
-func IngestMetricsData(ctx context.Context, s *Storage, metrics pmetric.Metrics) error {
-	metricsMap := NewMetricsModel(s)
+func IngestMetricsData(ctx context.Context, s *Storage, metricsData pmetric.Metrics) error {
+	metricsMap := newMetricsModel(s)
 
-	for i := 0; i < metrics.ResourceMetrics().Len(); i++ {
-		resMetrics := metrics.ResourceMetrics().At(i)
+	for i := range metricsData.ResourceMetrics().Len() {
+		resMetrics := metricsData.ResourceMetrics().At(i)
 
-		resSchemaUrl := resMetrics.SchemaUrl()
 		resAttrs := resMetrics.Resource().Attributes()
+		resServiceName := getServiceName(resAttrs)
+		resAttrsBytes, resAttrsErr := json.Marshal(resAttrs.AsRaw())
+		if resAttrsErr != nil {
+			return fmt.Errorf("failed to marshal json metric resource attributes: %w", resAttrsErr)
+		}
+		resSchemaUrl := resMetrics.SchemaUrl()
+		resDroppedAttrsCount := resMetrics.Resource().DroppedAttributesCount()
 
-		for j := 0; j < resMetrics.ScopeMetrics().Len(); j++ {
+		for j := range resMetrics.ScopeMetrics().Len() {
 			scopeMetrics := resMetrics.ScopeMetrics().At(j)
 
-			scopeSchemaUrl := scopeMetrics.SchemaUrl()
 			scope := scopeMetrics.Scope()
+			scopeName := scope.Name()
+			scopeVersion := scope.Version()
+			scopeAttrs := scope.Attributes()
+			scopeAttrsBytes, scopeAttrsErr := json.Marshal(scopeAttrs.AsRaw())
+			if scopeAttrsErr != nil {
+				return fmt.Errorf("failed to marshal json metric scope attributes: %w", scopeAttrsErr)
+			}
+			scopeSchemaUrl := scopeMetrics.SchemaUrl()
+			scopeDroppedAttrsCount := scope.DroppedAttributesCount()
 
-			for k := 0; k < scopeMetrics.Metrics().Len(); k++ {
+			for k := range scopeMetrics.Metrics().Len() {
 				metric := scopeMetrics.Metrics().At(k)
 
 				if metric.Type() == pmetric.MetricTypeEmpty {
@@ -113,12 +144,16 @@ func IngestMetricsData(ctx context.Context, s *Storage, metrics pmetric.Metrics)
 					return errors.New("unsupported metrics type")
 				}
 
-				metricsModel.Add(resSchemaUrl, resAttrs, scopeSchemaUrl, scope, metric)
+				metricsModel.add(
+					resAttrsBytes, resDroppedAttrsCount, resServiceName, resSchemaUrl,
+					scopeName, scopeVersion, scopeAttrsBytes, scopeDroppedAttrsCount, scopeSchemaUrl,
+					metric,
+				)
 			}
 		}
 	}
 
-	return InsertMetrics(ctx, s, metricsMap)
+	return runIngestMetrics(ctx, s, metricsMap)
 }
 
 // TODO: modify to use in DuckDB

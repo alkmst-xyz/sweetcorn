@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
@@ -28,7 +27,7 @@ CREATE TABLE IF NOT EXISTS
 		attributes				JSON,
 		value					DOUBLE,
 		aggregation_temporality	INTEGER,
-		isMonotonic				BOOLEAN
+		is_monotonic			BOOLEAN
 	);`
 
 	insertMetricsSumSQL = `
@@ -45,7 +44,7 @@ INSERT INTO
 		attributes,
 		value,
 		aggregation_temporality,
-		isMonotonic
+		is_monotonic
 	)
 VALUES
 	(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
@@ -63,7 +62,7 @@ SELECT
 	attributes,
 	value,
 	aggregation_temporality,
-	isMonotonic
+	is_monotonic
 FROM
 	%s
 ORDER BY
@@ -83,65 +82,72 @@ type sumMetrics struct {
 	insertSQL string
 }
 
-func (s *sumMetrics) Add(
+func (m *sumMetrics) add(
+	resAttrsBytes []byte,
+	resDroppedAttrsCount uint32,
+	resServiceName string,
 	resSchemaUrl string,
-	resAttrs pcommon.Map,
+	scopeName string,
+	scopeVersion string,
+	scopeAttrsBytes []byte,
+	scopeDroppedAttrsCount uint32,
 	scopeSchemaUrl string,
-	scope pcommon.InstrumentationScope,
 	metric pmetric.Metric,
 ) {
 	sum := metric.Sum()
-	s.count += sum.DataPoints().Len()
-	s.data = append(s.data,
+	m.count += sum.DataPoints().Len()
+	m.data = append(m.data,
 		&sumModel{
 			baseMetricsModel: baseMetricsModel{
-				resSchemaUrl:   resSchemaUrl,
-				resAttrs:       resAttrs,
-				scopeSchemaUrl: scopeSchemaUrl,
-				scope:          scope,
-				name:           metric.Name(),
-				description:    metric.Description(),
-				unit:           metric.Unit(),
+				resAttrsBytes:          resAttrsBytes,
+				resDroppedAttrsCount:   resDroppedAttrsCount,
+				resServiceName:         resServiceName,
+				resSchemaUrl:           resSchemaUrl,
+				scopeName:              scopeName,
+				scopeVersion:           scopeVersion,
+				scopeAttrsBytes:        scopeAttrsBytes,
+				scopeDroppedAttrsCount: scopeDroppedAttrsCount,
+				scopeSchemaUrl:         scopeSchemaUrl,
+				name:                   metric.Name(),
+				description:            metric.Description(),
+				unit:                   metric.Unit(),
 			},
 			sum: sum,
 		})
 }
 
-func (s *sumMetrics) insert(ctx context.Context, db *sql.DB) error {
-	if s.count == 0 {
+func (m *sumMetrics) insert(ctx context.Context, db *sql.DB) error {
+	if m.count == 0 {
 		return nil
 	}
 
-	for _, model := range s.data {
-		resAttrs := model.resAttrs
-		resServiceName := getServiceName(resAttrs)
-		resAttrsBytes, resAttrsErr := json.Marshal(resAttrs.AsRaw())
-		if resAttrsErr != nil {
-			return fmt.Errorf("failed to marshal json metric resource attributes: %w", resAttrsErr)
-		}
-
+	for _, model := range m.data {
 		dataPoints := model.sum.DataPoints()
 		for i := 0; i < dataPoints.Len(); i++ {
 			dp := dataPoints.At(i)
+
+			value := getValue(dp.IntValue(), dp.DoubleValue(), dp.ValueType())
+			aggTemp := model.sum.AggregationTemporality()
+			isMonotonic := model.sum.IsMonotonic()
 
 			dpAttrsBytes, dpAttrsErr := json.Marshal(dp.Attributes())
 			if dpAttrsErr != nil {
 				return fmt.Errorf("failed to marshal json metric attributes: %w", dpAttrsErr)
 			}
 
-			_, err := db.ExecContext(ctx, s.insertSQL,
+			_, err := db.ExecContext(ctx, m.insertSQL,
 				dp.Timestamp().AsTime(),
-				resServiceName,
+				model.resServiceName,
 				model.name,
 				model.description,
 				model.unit,
-				resAttrsBytes,
-				model.scope.Name(),
-				model.scope.Version(),
+				model.resAttrsBytes,
+				model.scopeName,
+				model.scopeVersion,
 				dpAttrsBytes,
-				getValue(dp.IntValue(), dp.DoubleValue(), dp.ValueType()),
-				int32(model.sum.AggregationTemporality()),
-				model.sum.IsMonotonic(),
+				value,
+				aggTemp,
+				isMonotonic,
 			)
 			if err != nil {
 				return err

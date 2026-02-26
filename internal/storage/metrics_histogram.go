@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/duckdb/duckdb-go/v2"
-	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
@@ -93,43 +92,47 @@ type histogramMetrics struct {
 	insertSQL string
 }
 
-func (h *histogramMetrics) Add(
+func (m *histogramMetrics) add(
+	resAttrsBytes []byte,
+	resDroppedAttrsCount uint32,
+	resServiceName string,
 	resSchemaUrl string,
-	resAttrs pcommon.Map,
+	scopeName string,
+	scopeVersion string,
+	scopeAttrsBytes []byte,
+	scopeDroppedAttrsCount uint32,
 	scopeSchemaUrl string,
-	scope pcommon.InstrumentationScope,
 	metric pmetric.Metric,
 
 ) {
 	histogram := metric.Histogram()
-	h.count += histogram.DataPoints().Len()
-	h.data = append(h.data,
+	m.count += histogram.DataPoints().Len()
+	m.data = append(m.data,
 		&histogramModel{
 			baseMetricsModel: baseMetricsModel{
-				resSchemaUrl:   resSchemaUrl,
-				resAttrs:       resAttrs,
-				scopeSchemaUrl: scopeSchemaUrl,
-				scope:          scope,
-				name:           metric.Name(),
-				description:    metric.Description(),
-				unit:           metric.Unit(),
+				resAttrsBytes:          resAttrsBytes,
+				resDroppedAttrsCount:   resDroppedAttrsCount,
+				resServiceName:         resServiceName,
+				resSchemaUrl:           resSchemaUrl,
+				scopeName:              scopeName,
+				scopeVersion:           scopeVersion,
+				scopeAttrsBytes:        scopeAttrsBytes,
+				scopeDroppedAttrsCount: scopeDroppedAttrsCount,
+				scopeSchemaUrl:         scopeSchemaUrl,
+				name:                   metric.Name(),
+				description:            metric.Description(),
+				unit:                   metric.Unit(),
 			},
 			histogram: histogram,
 		})
 }
 
-func (h *histogramMetrics) insert(ctx context.Context, db *sql.DB) error {
-	if h.count == 0 {
+func (m *histogramMetrics) insert(ctx context.Context, db *sql.DB) error {
+	if m.count == 0 {
 		return nil
 	}
 
-	for _, model := range h.data {
-		resAttrs := model.resAttrs
-		resServiceName := getServiceName(resAttrs)
-		resAttrsBytes, resAttrsErr := json.Marshal(resAttrs.AsRaw())
-		if resAttrsErr != nil {
-			return fmt.Errorf("failed to marshal json metric resource attributes: %w", resAttrsErr)
-		}
+	for _, model := range m.data {
 
 		dataPoints := model.histogram.DataPoints()
 		for i := 0; i < dataPoints.Len(); i++ {
@@ -140,15 +143,15 @@ func (h *histogramMetrics) insert(ctx context.Context, db *sql.DB) error {
 				return fmt.Errorf("failed to marshal json metric attributes: %w", dpAttrsErr)
 			}
 
-			_, err := db.ExecContext(ctx, h.insertSQL,
+			_, err := db.ExecContext(ctx, m.insertSQL,
 				dp.Timestamp().AsTime(),
-				resServiceName,
+				model.resServiceName,
 				model.name,
 				model.description,
 				model.unit,
-				resAttrsBytes,
-				model.scope.Name(),
-				model.scope.Version(),
+				model.resAttrsBytes,
+				model.scopeName,
+				model.scopeVersion,
 				dpAttrsBytes,
 				dp.Count(),
 				dp.Sum(),

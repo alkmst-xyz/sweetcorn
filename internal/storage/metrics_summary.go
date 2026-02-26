@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/duckdb/duckdb-go/v2"
-	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
@@ -87,43 +86,46 @@ type summaryMetrics struct {
 	insertSQL string
 }
 
-func (s *summaryMetrics) Add(
+func (m *summaryMetrics) add(
+	resAttrsBytes []byte,
+	resDroppedAttrsCount uint32,
+	resServiceName string,
 	resSchemaUrl string,
-	resAttrs pcommon.Map,
-	scopeURL string,
-	scopeInstr pcommon.InstrumentationScope,
-	metrics pmetric.Metric,
+	scopeName string,
+	scopeVersion string,
+	scopeAttrsBytes []byte,
+	scopeDroppedAttrsCount uint32,
+	scopeSchemaUrl string,
+	metric pmetric.Metric,
 ) {
-	summary := metrics.Summary()
-	s.count += summary.DataPoints().Len()
-	s.data = append(s.data,
+	summary := metric.Summary()
+	m.count += summary.DataPoints().Len()
+	m.data = append(m.data,
 		&summaryModel{
 			baseMetricsModel: baseMetricsModel{
-				resSchemaUrl:   resSchemaUrl,
-				resAttrs:       resAttrs,
-				scopeSchemaUrl: scopeURL,
-				scope:          scopeInstr,
-				name:           metrics.Name(),
-				description:    metrics.Description(),
-				unit:           metrics.Unit(),
+				resAttrsBytes:          resAttrsBytes,
+				resDroppedAttrsCount:   resDroppedAttrsCount,
+				resServiceName:         resServiceName,
+				resSchemaUrl:           resSchemaUrl,
+				scopeName:              scopeName,
+				scopeVersion:           scopeVersion,
+				scopeAttrsBytes:        scopeAttrsBytes,
+				scopeDroppedAttrsCount: scopeDroppedAttrsCount,
+				scopeSchemaUrl:         scopeSchemaUrl,
+				name:                   metric.Name(),
+				description:            metric.Description(),
+				unit:                   metric.Unit(),
 			},
 			summary: summary,
 		})
 }
 
-func (s *summaryMetrics) insert(ctx context.Context, db *sql.DB) error {
-	if s.count == 0 {
+func (m *summaryMetrics) insert(ctx context.Context, db *sql.DB) error {
+	if m.count == 0 {
 		return nil
 	}
 
-	for _, model := range s.data {
-		resAttrs := model.resAttrs
-		resServiceName := getServiceName(resAttrs)
-		resAttrsBytes, resAttrsErr := json.Marshal(resAttrs.AsRaw())
-		if resAttrsErr != nil {
-			return fmt.Errorf("failed to marshal json metric resource attributes: %w", resAttrsErr)
-		}
-
+	for _, model := range m.data {
 		dataPoints := model.summary.DataPoints()
 		for i := 0; i < dataPoints.Len(); i++ {
 			dp := dataPoints.At(i)
@@ -135,15 +137,15 @@ func (s *summaryMetrics) insert(ctx context.Context, db *sql.DB) error {
 
 			quantiles, values := convertValueAtQuantile(dp.QuantileValues())
 
-			_, err := db.ExecContext(ctx, s.insertSQL,
+			_, err := db.ExecContext(ctx, m.insertSQL,
 				dp.Timestamp().AsTime(),
-				resServiceName,
+				model.resServiceName,
 				model.name,
 				model.description,
 				model.unit,
-				resAttrsBytes,
-				model.scope.Name(),
-				model.scope.Version(),
+				model.resAttrsBytes,
+				model.scopeName,
+				model.scopeVersion,
 				dpAttrsBytes,
 				dp.Count(),
 				dp.Sum(),

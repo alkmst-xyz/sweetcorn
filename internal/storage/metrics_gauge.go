@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
@@ -77,63 +76,68 @@ type gaugeMetrics struct {
 	insertSQL string
 }
 
-func (g *gaugeMetrics) Add(
+func (m *gaugeMetrics) add(
+	resAttrsBytes []byte,
+	resDroppedAttrsCount uint32,
+	resServiceName string,
 	resSchemaUrl string,
-	resAttrs pcommon.Map,
+	scopeName string,
+	scopeVersion string,
+	scopeAttrsBytes []byte,
+	scopeDroppedAttrsCount uint32,
 	scopeSchemaUrl string,
-	scope pcommon.InstrumentationScope,
 	metric pmetric.Metric,
 ) {
 	gauge := metric.Gauge()
-	g.count += gauge.DataPoints().Len()
-	g.data = append(g.data,
+	m.count += gauge.DataPoints().Len()
+	m.data = append(m.data,
 		&gaugeModel{
 			baseMetricsModel: baseMetricsModel{
-				resSchemaUrl:   resSchemaUrl,
-				resAttrs:       resAttrs,
-				scopeSchemaUrl: scopeSchemaUrl,
-				scope:          scope,
-				name:           metric.Name(),
-				description:    metric.Description(),
-				unit:           metric.Unit(),
+				resAttrsBytes:          resAttrsBytes,
+				resDroppedAttrsCount:   resDroppedAttrsCount,
+				resServiceName:         resServiceName,
+				resSchemaUrl:           resSchemaUrl,
+				scopeName:              scopeName,
+				scopeVersion:           scopeVersion,
+				scopeAttrsBytes:        scopeAttrsBytes,
+				scopeDroppedAttrsCount: scopeDroppedAttrsCount,
+				scopeSchemaUrl:         scopeSchemaUrl,
+				name:                   metric.Name(),
+				description:            metric.Description(),
+				unit:                   metric.Unit(),
 			},
 			gauge: gauge,
 		})
 }
 
-func (g *gaugeMetrics) insert(ctx context.Context, db *sql.DB) error {
-	if g.count == 0 {
+func (m *gaugeMetrics) insert(ctx context.Context, db *sql.DB) error {
+	if m.count == 0 {
 		return nil
 	}
 
-	for _, model := range g.data {
-		resAttrs := model.resAttrs
-		resServiceName := getServiceName(resAttrs)
-		resAttrsBytes, resAttrsErr := json.Marshal(resAttrs.AsRaw())
-		if resAttrsErr != nil {
-			return fmt.Errorf("failed to marshal json metric resource attributes: %w", resAttrsErr)
-		}
-
+	for _, model := range m.data {
 		dataPoints := model.gauge.DataPoints()
 		for i := 0; i < dataPoints.Len(); i++ {
 			dp := dataPoints.At(i)
+
+			value := getValue(dp.IntValue(), dp.DoubleValue(), dp.ValueType())
 
 			dpAttrsBytes, dpAttrsErr := json.Marshal(dp.Attributes())
 			if dpAttrsErr != nil {
 				return fmt.Errorf("failed to marshal json metric attributes: %w", dpAttrsErr)
 			}
 
-			_, err := db.ExecContext(ctx, g.insertSQL,
+			_, err := db.ExecContext(ctx, m.insertSQL,
 				dp.Timestamp().AsTime(),
-				resServiceName,
+				model.resServiceName,
 				model.name,
 				model.description,
 				model.unit,
-				resAttrsBytes,
-				model.scope.Name(),
-				model.scope.Version(),
+				model.resAttrsBytes,
+				model.scopeName,
+				model.scopeVersion,
 				dpAttrsBytes,
-				getValue(dp.IntValue(), dp.DoubleValue(), dp.ValueType()),
+				value,
 			)
 			if err != nil {
 				return err
