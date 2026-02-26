@@ -380,7 +380,7 @@ func InsertTracesData(ctx context.Context, db *sql.DB, insertTracesSQL string, t
 			scopeAttrs := scope.Attributes()
 			scopeAttrsBytes, scopeAttrsErr := json.Marshal(scopeAttrs.AsRaw())
 			if scopeAttrsErr != nil {
-				return fmt.Errorf("failed to marshal json log scope attributes: %w", scopeAttrsErr)
+				return fmt.Errorf("failed to marshal json trace scope attributes: %w", scopeAttrsErr)
 			}
 
 			for k := range scopeSpans.Spans().Len() {
