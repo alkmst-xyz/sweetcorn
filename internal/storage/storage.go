@@ -80,7 +80,10 @@ func (b DuckDBBackend) init(ctx context.Context, dsn string, cfg StorageConfig) 
 		return nil, err
 	}
 
-	createTables(ctx, cfg, db)
+	err = createTables(ctx, cfg, db)
+	if err != nil {
+		return nil, err
+	}
 
 	return db, nil
 }
@@ -93,8 +96,15 @@ func (b DuckLakeBackend) init(ctx context.Context, dsn string, cfg StorageConfig
 		return nil, err
 	}
 
-	setupDuckLake(ctx, cfg, db)
-	createTables(ctx, cfg, db)
+	err = setupDuckLake(ctx, cfg, db)
+	if err != nil {
+		return nil, err
+	}
+
+	err = createTables(ctx, cfg, db)
+	if err != nil {
+		return nil, err
+	}
 
 	return db, nil
 }
