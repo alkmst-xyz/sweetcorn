@@ -3,11 +3,14 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
@@ -192,4 +195,30 @@ func getValue(intValue int64, floatValue float64, dataType any) float64 {
 		// logger.Warn("unsupported ValueType, current support: ExemplarValueType, NumberDataPointValueType, ues 0.0 as default")
 		return 0.0
 	}
+}
+
+func convertExemplars(exemplars pmetric.ExemplarSlice) ([]pcommon.Map, []time.Time, []int64, []float64, []string, []string) {
+	var (
+		attrs        []pcommon.Map
+		times        []time.Time
+		intValues    []int64
+		doubleValues []float64
+		traceIDs     []string
+		spanIDs      []string
+	)
+	for i := 0; i < exemplars.Len(); i++ {
+		exemplar := exemplars.At(i)
+
+		attrs = append(attrs, exemplar.FilteredAttributes())
+		times = append(times, exemplar.Timestamp().AsTime())
+		intValues = append(intValues, exemplar.IntValue())
+		doubleValues = append(doubleValues, exemplar.DoubleValue())
+
+		spanID := exemplar.SpanID()
+		spanIDs = append(spanIDs, hex.EncodeToString(spanID[:]))
+
+		traceID := exemplar.TraceID()
+		traceIDs = append(traceIDs, hex.EncodeToString(traceID[:]))
+	}
+	return attrs, times, intValues, doubleValues, spanIDs, traceIDs
 }

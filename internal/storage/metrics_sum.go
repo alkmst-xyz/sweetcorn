@@ -33,8 +33,14 @@ CREATE TABLE IF NOT EXISTS
 		data_dp_attributes					JSON,
 		data_dp_start_time_unix_nano		TIMESTAMP_NS,
 		data_dp_time_unix_nano				TIMESTAMP_NS,
-		data_dp_value_double				DOUBLE,
 		data_dp_value_int					INT64,
+		data_dp_value_double				DOUBLE,
+		data_dp_exemplars_attributes		JSON,
+		data_dp_exemplars_time_unix_nano	TIMESTAMP_NS[],
+		data_dp_exemplars_value_int			INT64[],
+		data_dp_exemplars_value_double		DOUBLE[],
+		data_dp_exemplars_span_id			VARCHAR[],
+		data_dp_exemplars_trace_id			VARCHAR[],
 		data_dp_flags						UINT32,
 		data_aggregation_temporality		INT32,
 		data_is_monotonic					BOOLEAN
@@ -59,14 +65,20 @@ INSERT INTO
 		data_dp_attributes,
 		data_dp_start_time_unix_nano,
 		data_dp_time_unix_nano,
-		data_dp_value_double,
 		data_dp_value_int,
+		data_dp_value_double,
+		data_dp_exemplars_attributes,
+		data_dp_exemplars_time_unix_nano,
+		data_dp_exemplars_value_int,
+		data_dp_exemplars_value_double,
+		data_dp_exemplars_span_id,
+		data_dp_exemplars_trace_id,
 		data_dp_flags,
 		data_aggregation_temporality,
 		data_is_monotonic
 	)
 VALUES
-	(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
+	(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`
 
 	queryMetricsSumSQL = `
 SELECT
@@ -158,6 +170,13 @@ func (m *sumMetrics) insert(ctx context.Context, db *sql.DB) error {
 				return fmt.Errorf("failed to marshal json metric attributes: %w", dpAttrsErr)
 			}
 
+			dpExAttrs, dpExTimes, dpExIntVals, dpExDoubleVals, dpExSpanIds, dpExTraceIds := convertExemplars(dp.Exemplars())
+
+			dpExAttrsBytes, dpExAttrsErr := json.Marshal(dpExAttrs)
+			if dpExAttrsErr != nil {
+				return fmt.Errorf("failed to marshal json metric exemplar attributes: %w", dpExAttrsErr)
+			}
+
 			_, err := db.ExecContext(ctx, m.insertSQL,
 				model.resServiceName,
 				model.resAttrsBytes,
@@ -175,9 +194,14 @@ func (m *sumMetrics) insert(ctx context.Context, db *sql.DB) error {
 				dpAttrsBytes,
 				dp.StartTimestamp().AsTime(),
 				dp.Timestamp().AsTime(),
-				dp.DoubleValue(),
 				dp.IntValue(),
-				// exemplars
+				dp.DoubleValue(),
+				dpExAttrsBytes,
+				dpExTimes,
+				dpExIntVals,
+				dpExDoubleVals,
+				dpExSpanIds,
+				dpExTraceIds,
 				dp.Flags(),
 				aggTemp,
 				isMonotonic,
