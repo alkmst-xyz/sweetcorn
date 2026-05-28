@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -345,8 +346,13 @@ func convertLinks(links ptrace.SpanLinkSlice) (
 ) {
 	for i := 0; i < links.Len(); i++ {
 		link := links.At(i)
-		traceIDs = append(traceIDs, link.TraceID().String())
-		spanIDs = append(spanIDs, link.SpanID().String())
+		traceID := link.TraceID()
+		traceIDStr := hex.EncodeToString(traceID[:])
+		spanID := link.SpanID()
+		spanIDStr := hex.EncodeToString(spanID[:])
+
+		traceIDs = append(traceIDs, traceIDStr)
+		spanIDs = append(spanIDs, spanIDStr)
 		states = append(states, link.TraceState().AsRaw())
 
 		linkAttrBytes, linkAttrErr := json.Marshal(link.Attributes().AsRaw())
@@ -406,11 +412,18 @@ func InsertTracesData(ctx context.Context, db *sql.DB, insertTracesSQL string, t
 					return fmt.Errorf("failed to convert json trace links: %w", linksErr)
 				}
 
+				traceID := span.TraceID()
+				traceIDStr := hex.EncodeToString(traceID[:])
+				spanID := span.SpanID()
+				spanIDStr := hex.EncodeToString(spanID[:])
+				parentSpanID := span.SpanID()
+				parentSpanIDStr := hex.EncodeToString(parentSpanID[:])
+
 				_, err := db.ExecContext(ctx, insertTracesSQL,
-					span.TraceID().String(),
-					span.SpanID().String(),
+					traceIDStr,
+					spanIDStr,
 					span.TraceState().AsRaw(),
-					span.ParentSpanID().String(),
+					parentSpanIDStr,
 					span.Flags(),
 					span.Name(),
 					span.Kind(),

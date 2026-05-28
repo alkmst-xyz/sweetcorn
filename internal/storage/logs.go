@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -153,6 +154,11 @@ func InsertLogsData(ctx context.Context, db *sql.DB, insertLogsSQL string, logsD
 					return fmt.Errorf("failed to marshal json log attributes: %w", logAttrsErr)
 				}
 
+				traceID := logRecord.TraceID()
+				traceIDStr := hex.EncodeToString(traceID[:])
+				spanID := logRecord.SpanID()
+				spanIDStr := hex.EncodeToString(spanID[:])
+
 				_, err := db.ExecContext(ctx, insertLogsSQL,
 					logRecord.Timestamp().AsTime(),
 					logRecord.ObservedTimestamp().AsTime(),
@@ -162,8 +168,8 @@ func InsertLogsData(ctx context.Context, db *sql.DB, insertLogsSQL string, logsD
 					logAttrsBytes,
 					logRecord.DroppedAttributesCount(),
 					logRecord.Flags(),
-					logRecord.TraceID().String(),
-					logRecord.SpanID().String(),
+					traceIDStr,
+					spanIDStr,
 					logRecord.EventName(),
 					resAttrsBytes,
 					resDroppedAttributesCount,
