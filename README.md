@@ -23,9 +23,9 @@
 	</a>
 </p>
 
-Sweetcorn is a DuckDB/DuckLake storage backend for OpenTelemetry signals.
-
 > **CAUTION:** This project is currently in **pre-alpha**.
+
+Sweetcorn is a DuckDB/DuckLake storage backend for OpenTelemetry signals.
 
 ## Quick start
 
@@ -91,6 +91,11 @@ docker compose up -d
   - OTEL collector -> Sweetcorn (+ Postgres, MinIO)
   - Visualize with Grafana
   - Consider comparing with Grafana stack (alloy+loki+mimir+tempo).
+- [ ] Reconsider transactional guarantees:
+  - We don't need full SQL semantics.
+  - Make all write asynchronous because all writes are append only.
+- [ ] Disallow reading/writing to the storage systems: catalog and file storage.
+  - This make it possible to have a system we can reason about.
 
 ### Development
 
@@ -118,6 +123,16 @@ telemetrygen traces --otlp-insecure --otlp-endpoint localhost:4317 --duration 5s
 telemetrygen logs --otlp-http --otlp-insecure --otlp-endpoint localhost:4318 --duration 5s
 telemetrygen traces --otlp-http --otlp-insecure --otlp-endpoint localhost:4318 --duration 5s
 ```
+
+## Design
+
+- Unified storage layer for all OTEL signals.
+- Transform OTEL query to a database query problem.
+- Cross-signal joins.
+- Automatic analytics (like Metabase X-ray).
+- Alarms, triggers.
+
+> _A wealth of information creates a poverty of attention - Herbert A. Simon_
 
 ## References
 
