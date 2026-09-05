@@ -1,0 +1,35 @@
+<script setup lang="ts">
+import Nav, { type NavItemType } from './Nav.vue'
+
+const navItems: Array<NavItemType> = [
+  {
+    path: '/',
+    title: 'Home',
+  },
+  {
+    path: '/logs',
+    title: 'Logs',
+    exact: false,
+  },
+  {
+    path: '/traces',
+    title: 'Traces',
+    exact: false,
+  },
+  {
+    path: '/metrics',
+    title: 'Metrics',
+  },
+  {
+    path: '/about',
+    title: 'About',
+  },
+]
+</script>
+
+<template>
+  <header class="flex flex-col items-start space-y-2 px-4 py-4">
+    <h1 class="text-lg font-semibold">Sweetcorn</h1>
+    <Nav :items="navItems" />
+  </header>
+</template>

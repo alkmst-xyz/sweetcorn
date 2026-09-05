@@ -15,4 +15,5 @@
 
 .sweetcorn_data/
 build/
+**/dist/
 node_modules/
