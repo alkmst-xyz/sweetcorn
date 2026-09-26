@@ -97,6 +97,14 @@ onMounted(() => {
           preventDefault: true,
           run: insertTab,
         },
+        // TODO: Disable 'defaultKeymap' to work.
+        {
+          key: 'Mod-Enter',
+          run: () => {
+            handleRun()
+            return true
+          },
+        },
       ]),
       // Additional extensions.
       indentUnit.of('    '),

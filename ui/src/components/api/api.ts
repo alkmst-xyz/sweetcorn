@@ -8,6 +8,7 @@ import type {
   MetricsRecordHistogram,
   MetricsRecordSum,
   MetricsRecordSummary,
+  QuerySqlResponse,
 } from './types'
 
 export async function getHealthz() {
@@ -60,4 +61,12 @@ export async function getMetricsExponentialHistogram(): Promise<
 export async function getMetricsSummary(): Promise<MetricsRecordSummary[]> {
   const res = await fetch('/api/v1/metrics/summary')
   return (await res.json()) as Array<MetricsRecordSummary>
+}
+
+export async function postQuery(payload: string) {
+  const res = await fetch('/api/v1/query', {
+    method: 'POST',
+    body: payload,
+  })
+  return (await res.json()) as QuerySqlResponse
 }

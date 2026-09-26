@@ -162,3 +162,8 @@ export type MetricsRecordSummary = MetricsRecordBase & {
   quantileQuantiles: number[]
   quantileValues: number[]
 }
+
+export type QuerySqlResponse = {
+  columns: Array<string>
+  results: Array<Array<string | number | boolean>>
+}
