@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -133,6 +134,26 @@ func (s WebService) getMetricsExponentialHistogramHandler(w http.ResponseWriter,
 
 func (s WebService) getMetricsSummaryHandler(w http.ResponseWriter, r *http.Request) {
 	res, err := storage.QueryMetricsSummary(s.ctx, s.storage)
+	if err != nil {
+		w.Header().Set("Content-Type", webDefaultContentType)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", webDefaultContentType)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(res)
+}
+
+func (s WebService) postQuery(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.Header().Set("Content-Type", webDefaultContentType)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	res, err := storage.QuerySql(s.ctx, s.storage, string(body))
 	if err != nil {
 		w.Header().Set("Content-Type", webDefaultContentType)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -433,6 +454,7 @@ func StartWebApp(ctx context.Context, storage *storage.Storage, addr string) err
 	mux.HandleFunc("GET /api/v1/metrics/histogram", s.getMetricsHistogramHandler)
 	mux.HandleFunc("GET /api/v1/metrics/exponential-histogram", s.getMetricsExponentialHistogramHandler)
 	mux.HandleFunc("GET /api/v1/metrics/summary", s.getMetricsSummaryHandler)
+	mux.HandleFunc("POST /api/v1/query", s.postQuery)
 
 	// Jaeger Query Internal HTTP API
 	// Ref: https://www.jaegertracing.io/docs/2.9/architecture/apis/#internal-http-json
