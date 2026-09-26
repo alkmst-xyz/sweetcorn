@@ -1,14 +1,9 @@
 <script setup lang="ts">
-import { getLogs, type LogRecord } from '@/components/api'
+import { getLogs } from '@/components/api'
 import BaseLayout from '@/layouts/BaseLayout.vue'
 import { useHead } from '@unhead/vue'
-import { onMounted, ref } from 'vue'
 import LogsTable from './LogsTable.vue'
-
-const logs = ref<LogRecord[]>([])
-onMounted(async () => {
-  logs.value = await getLogs()
-})
+import { useQuery } from '@tanstack/vue-query'
 
 useHead({
   title: 'Logs | Sweetcorn',
@@ -19,6 +14,11 @@ useHead({
     },
   ],
 })
+
+const { isPending, data, error } = useQuery({
+  queryKey: ['logs'],
+  queryFn: getLogs,
+})
 </script>
 
 <template>
@@ -26,9 +26,18 @@ useHead({
     <div>
       <h1 class="mb-4 font-semibold">Logs</h1>
 
-      <div>Number of logs: {{ logs?.length }}</div>
+      <div v-if="isPending">
+        <span>Loading...</span>
+      </div>
 
-      <LogsTable :data="logs" />
+      <div v-if="error">
+        <span>Error: {{ error.message }}</span>
+      </div>
+
+      <div v-if="data">
+        <div>Number of logs: {{ data.length }}</div>
+        <LogsTable :data="data" />
+      </div>
     </div>
   </BaseLayout>
 </template>

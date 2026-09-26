@@ -17,6 +17,8 @@
     "format": "prettier --write --experimental-cli src/"
   },
   "dependencies": {
+    "@tanstack/vue-query": "^5.104.0",
+    "@tanstack/vue-table": "^9.2.4",
     "pinia": "^4.0.3",
     "vue": "^3.5.42",
     "vue-router": "^5.3.1"
@@ -25,8 +27,9 @@
     "@fontsource/fira-mono": "^5.0.0",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.0.0",
+    "@tanstack/devtools-vite": "^0.8.5",
     "@tanstack/vue-devtools": "^0.2.26",
-    "@tanstack/vue-table": "^9.2.4",
+    "@tanstack/vue-query-devtools": "^6.3.0",
     "@tanstack/vue-table-devtools": "^9.2.0",
     "@tsconfig/node24": "^24.0.5",
     "@types/jsdom": "^30.0.0",
